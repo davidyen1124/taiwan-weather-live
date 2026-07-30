@@ -1,36 +1,40 @@
 import {
+  Bell,
   ChevronRight,
   CloudSun,
-  Droplets,
-  Gauge,
-  House,
-  LocateFixed,
-  Map,
   Menu,
   Navigation,
   RefreshCw,
-  Sparkles,
-  ThermometerSun,
 } from "lucide-react";
 import type { WeatherBundle } from "../lib/weather";
 import {
   aqiStatus,
+  feelsLikeTemperatureColor,
   formatTaipeiTime,
   windDirectionText,
 } from "../lib/weather";
 import { WeatherIcon } from "./WeatherIcon";
+import { BottomNavigation, type RootView } from "./BottomNavigation";
+import { WeatherHero } from "./WeatherHero";
 
-export type SheetName = "menu" | "seven-day" | "seventy-two" | "aqi" | "insights";
+export type SheetName =
+  | "menu"
+  | "locations"
+  | "location-search"
+  | "notifications"
+  | "seven-day"
+  | "seventy-two"
+  | "aqi"
+  | "rainfall"
+  | "temperature-ranking";
 
 type Props = {
   data: WeatherBundle | null;
   loading: boolean;
   error: string | null;
-  locating: boolean;
-  onLocate: () => void;
   onRefresh: () => void;
   onOpenSheet: (sheet: SheetName) => void;
-  onOpenRadar: () => void;
+  onNavigate: (view: RootView) => void;
 };
 
 function LoadingHome() {
@@ -49,11 +53,9 @@ export function WeatherHome({
   data,
   loading,
   error,
-  locating,
-  onLocate,
   onRefresh,
   onOpenSheet,
-  onOpenRadar,
+  onNavigate,
 }: Props) {
   if (loading && !data) return <LoadingHome />;
   if (!data) {
@@ -69,17 +71,21 @@ export function WeatherHome({
     );
   }
 
-  const { observation, forecast, aqi, hourlyRainfall, dailyRainfall, heat } = data;
+  const { observation, forecast, aqi, hourlyRainfall, heat } = data;
   const today = forecast.daily[0];
   const hourly = forecast.hourly.slice(0, 6);
   const aqiInfo = aqiStatus(aqi.aqi);
   const place = `${forecast.city ?? observation.county} ${forecast.locationName ?? observation.township}`;
   const latestRain = hourlyRainfall.hourlyRainfall.at(-1)?.precipitation ?? observation.precipitation?.now ?? 0;
+  const feelsLike = heat.feelsLike ?? forecast.hourly[0]?.feelsLike;
 
   return (
     <main className="home-screen">
       <section className="hero-section">
-        <img className="hero-art" src="/weather-hero.png" alt="" />
+        <WeatherHero
+          description={today?.weatherDescription ?? observation.weatherShortDescription}
+          observedAt={observation.observedAt}
+        />
         <div className="hero-controls">
           <button
             type="button"
@@ -91,18 +97,23 @@ export function WeatherHome({
           </button>
           <button
             type="button"
-            className="icon-button locate-button"
-            aria-label="使用目前位置"
-            onClick={onLocate}
-            disabled={locating}
+            className="icon-button alert-button"
+            aria-label="開啟通知設定"
+            onClick={() => onOpenSheet("notifications")}
           >
-            <LocateFixed size={23} className={locating ? "spin" : ""} />
+            <Bell size={23} />
           </button>
         </div>
 
         <div className="hero-copy">
           <h1>
-            {place} <Navigation size={19} fill="currentColor" aria-hidden />
+            <button
+              type="button"
+              className="location-title-button"
+              onClick={() => onOpenSheet("locations")}
+            >
+              {place} <Navigation size={19} fill="currentColor" aria-hidden />
+            </button>
           </h1>
           <div className="current-temperature">{Math.round(observation.temperature)}°</div>
           <p className="high-low">
@@ -128,17 +139,20 @@ export function WeatherHome({
         {error ? <div className="inline-notice">目前顯示上次成功取得的資料</div> : null}
 
         <div className="metric-grid">
-          <button type="button" className="metric-card" onClick={() => onOpenSheet("insights")}>
+          <button type="button" className="metric-card" onClick={() => onOpenSheet("rainfall")}>
             <span>近一小時降雨</span>
             <strong>{latestRain > 0 ? `${latestRain} mm` : `${today?.precipitationProbability ?? 0}%`}</strong>
           </button>
-          <button type="button" className="metric-card" onClick={() => onOpenSheet("insights")}>
+          <button type="button" className="metric-card" onClick={() => onOpenSheet("seven-day")}>
             <span>紫外線</span>
             <strong>{today?.uvIndex ?? observation.uvIndex?.value ?? 0} <small>{today?.uvDescription ?? "低量級"}</small></strong>
           </button>
-          <button type="button" className="metric-card" onClick={() => onOpenSheet("insights")}>
+          <button type="button" className="metric-card" onClick={() => onOpenSheet("temperature-ranking")}>
             <span>體感溫度</span>
-            <strong className="feels-like"><i />{heat.feelsLike ?? forecast.hourly[0]?.feelsLike ?? "--"}°</strong>
+            <strong className="feels-like">
+              <i style={{ background: feelsLikeTemperatureColor(feelsLike) }} />
+              {feelsLike ?? "--"}°
+            </strong>
           </button>
         </div>
 
@@ -196,28 +210,38 @@ export function WeatherHome({
 
         <div className="pager-dots" aria-hidden><i /><i /><i /><i /></div>
 
-        <div className="section-title-row advice-title">
-          <h2>生活建議</h2>
-          <button type="button" onClick={() => onOpenSheet("insights")}>
-            更多資訊 <ChevronRight size={20} />
+        <div className="section-title-row daily-title">
+          <h2>一週天氣</h2>
+          <button type="button" onClick={() => onOpenSheet("seven-day")}>
+            7日預報 <ChevronRight size={20} />
           </button>
         </div>
-        <div className="advice-strip">
-          <div><ThermometerSun /><span>舒適度</span><strong>{forecast.hourly[0]?.comfortDescription ?? "舒適"}</strong></div>
-          <div><Droplets /><span>今日雨勢</span><strong>{dailyRainfall.dailyRainfall.at(-1)?.precipitation ?? 0} mm</strong></div>
-          <div><Gauge /><span>氣壓</span><strong>{Math.round(observation.airPressure)} hPa</strong></div>
-          <div><Sparkles /><span>熱感排名</span><strong>全台 #{heat.rank}</strong></div>
-        </div>
+        <button
+          type="button"
+          className="daily-preview"
+          onClick={() => onOpenSheet("seven-day")}
+          aria-label="查看 7 日預報"
+        >
+          {forecast.daily.slice(0, 5).map((day, index) => (
+            <span key={day.date}>
+              <b>{index === 0 ? "今天" : new Intl.DateTimeFormat("zh-TW", {
+                weekday: "short",
+                timeZone: "Asia/Taipei",
+              }).format(new Date(`${day.date}T12:00:00+08:00`)).replace("週", "")}</b>
+              <WeatherIcon
+                description={day.weatherDescription}
+                precipitation={day.precipitationProbability}
+                size={28}
+              />
+              <em>{day.precipitationProbability ?? 0}%</em>
+              <strong>{day.maxTemperature}°</strong>
+              <small>{day.minTemperature}°</small>
+            </span>
+          ))}
+        </button>
       </section>
 
-      <nav className="bottom-nav" aria-label="主要導覽">
-        <button type="button" className="active" aria-current="page">
-          <span><House size={24} fill="currentColor" /></span>天氣
-        </button>
-        <button type="button" onClick={onOpenRadar}>
-          <span><Map size={25} fill="currentColor" /></span>圖資
-        </button>
-      </nav>
+      <BottomNavigation active="home" onNavigate={onNavigate} />
     </main>
   );
 }

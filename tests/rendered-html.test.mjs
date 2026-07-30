@@ -1,11 +1,6 @@
 import assert from "node:assert/strict";
-import { access, readFile, readdir } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
-
-const developmentPreviewMeta =
-  /<meta(?=[^>]*\bname=["']codex-preview["'])(?=[^>]*\bcontent=["']development["'])[^>]*>/i;
-const templateRoot = new URL("../", import.meta.url);
-const previewRoot = new URL("../app/_sites-preview/", import.meta.url);
 
 async function render() {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
@@ -28,60 +23,66 @@ async function render() {
   );
 }
 
-test("server-renders the starter loading skeleton", async () => {
+test("server-renders the Taiwan weather loading shell", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
   const html = await response.text();
-  assert.match(html, developmentPreviewMeta);
-  assert.match(html, /<title>Your site is taking shape<\/title>/i);
-  assert.match(html, /Codex is working/);
-  assert.match(html, /Your site is taking shape/);
-  assert.match(html, /Codex is building the first version/);
-  assert.match(html, /react-loading-skeleton/);
-  assert.match(html, /role="status"/);
+  assert.match(html, /<html lang="zh-Hant">/i);
+  assert.match(html, /<title>台灣即時天氣｜逐時預報、空氣品質與雷達<\/title>/i);
+  assert.match(html, /aria-busy="true"/);
+  assert.match(html, /正在讀取最新天氣/);
+  assert.match(html, /連線中央氣象資料中/);
 });
 
-test("keeps the loading skeleton scoped and disposable", async () => {
-  const [preview, css, page, layout, packageJson, files] = await Promise.all([
-    readFile(new URL("SkeletonPreview.tsx", previewRoot), "utf8"),
-    readFile(new URL("preview.css", previewRoot), "utf8"),
-    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../package.json", import.meta.url), "utf8"),
-    readdir(previewRoot),
+test("ships the current location, mountain, advisory, and swipe parity features", async () => {
+  const [
+    paritySheets,
+    advisoryScreen,
+    bottomNavigation,
+    weatherApp,
+    weatherLibrary,
+    detailSheets,
+    mountainJson,
+    districtJson,
+  ] = await Promise.all([
+    readFile(new URL("../app/components/ParitySheets.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/WeatherAdvisories.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/BottomNavigation.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/WeatherApp.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/lib/weather.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/DetailSheets.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/data/mountainLocations.json", import.meta.url), "utf8"),
+    readFile(new URL("../app/data/cityDistricts.json", import.meta.url), "utf8"),
   ]);
 
-  assert.deepEqual(files.sort(), ["SkeletonPreview.tsx", "preview.css"]);
-  assert.match(preview, /from "react-loading-skeleton"/);
-  assert.match(preview, /baseColor="#eceae7"/);
-  assert.match(preview, /highlightColor="#f9f8f6"/);
-  assert.match(preview, /duration=\{2\.8\}/);
-  assert.match(preview, /sites-skeleton-search-placeholder/);
-  assert.match(packageJson, /"react-loading-skeleton": "3\.5\.0"/);
-
-  const shellIndex = preview.indexOf('className="sites-skeleton-shell"');
-  const statusIndex = preview.indexOf('className="sites-skeleton-status"');
-  assert.ok(shellIndex >= 0 && statusIndex > shellIndex);
-  assert.match(css, /position:\s*fixed/);
-  assert.match(css, /inset:\s*0/);
-  assert.match(css, /opacity:\s*0\.52/);
-  assert.match(css, /prefers-reduced-motion:\s*reduce/);
-  assert.doesNotMatch(css, /#020617|canvas|pets|progress/i);
-  assert.doesNotMatch(
-    preview,
-    /loading-spinner|status-mark|status-progress|canvas|cookie|random/i,
+  const mountainLocations = JSON.parse(mountainJson);
+  const cityDistricts = JSON.parse(districtJson);
+  const districtCount = cityDistricts.reduce(
+    (total, city) => total + city.districts.length,
+    0,
   );
 
-  assert.match(page, /export const metadata:\s*Metadata/);
-  assert.match(page, /"codex-preview": "development"/);
-  assert.match(page, /<SkeletonPreview \/>/);
-  assert.match(layout, /title:\s*"Starter Project"/);
-  assert.doesNotMatch(layout, /codex-preview|_sites-preview|themeColor|\bViewport\b/);
-  assert.doesNotMatch(css, /(^|\s)(html|body)\s*\{/m);
-
-  await assert.rejects(
-    access(new URL("public/_sites-preview", templateRoot)),
-  );
+  assert.equal(mountainLocations.length, 151);
+  assert.equal(districtCount, 368);
+  assert.match(paritySheets, /我目前的位置/);
+  assert.match(paritySheets, /新增位置/);
+  assert.match(paritySheets, /通知設定/);
+  assert.match(paritySheets, /上移/);
+  assert.match(paritySheets, /下移/);
+  assert.match(paritySheets, /移除/);
+  assert.match(weatherApp, /taiwan-weather\.locations\.v1/);
+  assert.match(weatherLibrary, /"\/weather\/advisories"/);
+  assert.match(advisoryScreen, /天氣警特報/);
+  assert.match(advisoryScreen, /BottomNavigation/);
+  assert.match(bottomNavigation, /預報/);
+  assert.match(bottomNavigation, /圖資/);
+  assert.match(bottomNavigation, /警特報/);
+  assert.match(weatherLibrary, /FEELS_LIKE_COLOR_STOPS/);
+  assert.match(detailSheets, /左右滑動切換日期/);
+  assert.match(detailSheets, /今日逐時/);
+  assert.match(detailSheets, /溫度排行/);
+  assert.match(detailSheets, /onTouchStart/);
+  assert.match(detailSheets, /onTouchEnd/);
 });

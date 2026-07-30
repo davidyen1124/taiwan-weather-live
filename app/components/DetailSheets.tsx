@@ -2,42 +2,34 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowDown,
+  Bell,
   CalendarDays,
   ChevronRight,
-  CloudRain,
   Droplets,
   Flame,
   Gauge,
   LineChart,
   Map,
-  Mountain,
-  Navigation,
-  RefreshCw,
+  MapPin,
+  Share2,
   ThermometerSun,
   Wind,
-  X,
 } from "lucide-react";
 import type {
   AQIObservation,
   DailyForecastSegment,
-  HeatCard,
-  TemperatureImage,
   TemperatureLeaderboard,
   TemperatureRanking,
   WeatherBundle,
 } from "../lib/weather";
 import {
-  aqiStatus,
-  fetchAqiByStation,
-  fetchAqiStations,
-  fetchTemperatureImage,
   fetchTemperatureLeaderboard,
   fetchTemperatureRankings,
   formatDate,
   formatTaipeiTime,
 } from "../lib/weather";
 import type { SheetName } from "./WeatherHome";
+import { FullSheet } from "./FullSheet";
 import { WeatherIcon } from "./WeatherIcon";
 
 type Props = {
@@ -47,35 +39,6 @@ type Props = {
   onOpenRadar: () => void;
   onNavigate: (sheet: SheetName) => void;
 };
-
-type FullSheetProps = {
-  title: string;
-  children: React.ReactNode;
-  onClose: () => void;
-  className?: string;
-};
-
-function FullSheet({ title, children, onClose, className = "" }: FullSheetProps) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = 0;
-  }, [title]);
-
-  return (
-    <div className="sheet-backdrop">
-      <section className={`detail-sheet ${className}`} role="dialog" aria-modal="true" aria-label={title}>
-        <header className="sheet-header">
-          <h2>{title}</h2>
-          <button type="button" onClick={onClose} aria-label={`關閉${title}`}>
-            <X size={27} />
-          </button>
-        </header>
-        <div className="sheet-scroll" ref={scrollRef}>{children}</div>
-      </section>
-    </div>
-  );
-}
 
 function DayTabs({
   dates,
@@ -196,6 +159,7 @@ function SeventyTwoSheet({ data, onClose }: { data: WeatherBundle; onClose: () =
   const dates = Array.from(new Set(data.forecast.hourly.map((item) => item.time.slice(0, 10))));
   const [selectedDate, setSelectedDate] = useState(dates[0] ?? "");
   const [metric, setMetric] = useState<"temperature" | "feels" | "wind" | "humidity">("temperature");
+  const touchStartX = useRef<number | null>(null);
   const visible = data.forecast.hourly.filter((item) => item.time.slice(0, 10) === selectedDate);
   const series = visible.map((item) => {
     if (metric === "feels") return item.feelsLike;
@@ -205,55 +169,80 @@ function SeventyTwoSheet({ data, onClose }: { data: WeatherBundle; onClose: () =
   });
   const rain = visible.map((item) => item.precipitationProbability);
   const current = visible[0];
+  const visibleDates = dates.slice(0, 5);
+
+  function selectAdjacentDate(direction: -1 | 1) {
+    const index = visibleDates.indexOf(selectedDate);
+    const nextIndex = Math.min(
+      visibleDates.length - 1,
+      Math.max(0, index + direction),
+    );
+    if (nextIndex !== index) setSelectedDate(visibleDates[nextIndex]);
+  }
 
   return (
     <FullSheet title="72 小時預報" onClose={onClose} className="chart-sheet">
-      <DayTabs dates={dates.slice(0, 5)} selected={selectedDate} onSelect={setSelectedDate} />
-      <h3 className="selected-date-title">{selectedDate ? formatDate(selectedDate) : "--"}</h3>
-      <div className="segmented-control metric-tabs">
+      <DayTabs dates={visibleDates} selected={selectedDate} onSelect={setSelectedDate} />
+      <div
+        className="forecast-day-page"
+        onTouchStart={(event) => {
+          touchStartX.current = event.touches[0]?.clientX ?? null;
+        }}
+        onTouchEnd={(event) => {
+          if (touchStartX.current === null) return;
+          const distance = event.changedTouches[0]?.clientX - touchStartX.current;
+          touchStartX.current = null;
+          if (Math.abs(distance) < 48) return;
+          selectAdjacentDate(distance < 0 ? 1 : -1);
+        }}
+      >
+        <h3 className="selected-date-title">{selectedDate ? formatDate(selectedDate) : "--"}</h3>
+        <p className="swipe-date-hint">左右滑動切換日期</p>
+        <div className="segmented-control metric-tabs">
         <button type="button" className={metric === "temperature" ? "active" : ""} onClick={() => setMetric("temperature")}>實際氣溫</button>
         <button type="button" className={metric === "feels" ? "active" : ""} onClick={() => setMetric("feels")}>體感溫度</button>
         <button type="button" className={metric === "wind" ? "active" : ""} onClick={() => setMetric("wind")}>蒲福風級</button>
         <button type="button" className={metric === "humidity" ? "active" : ""} onClick={() => setMetric("humidity")}>濕度</button>
-      </div>
-
-      <div className="chart-summary">
-        <div>
-          <strong>{current ? series[0] : "--"}{metric === "wind" ? " 級" : metric === "humidity" ? "%" : "°"}</strong>
-          <span>最高 {series.length ? Math.max(...series) : "--"} · 最低 {series.length ? Math.min(...series) : "--"}</span>
         </div>
-        <WeatherIcon description={current?.weatherDescription} precipitation={current?.precipitationProbability} size={50} />
-      </div>
 
-      <div className="line-chart" aria-label="逐小時天氣曲線圖">
-        <svg viewBox="0 0 1000 250" preserveAspectRatio="none" role="img">
-          <defs>
-            <linearGradient id="temperature-fill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stopColor="#d9d9d9" stopOpacity=".75" />
-              <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
-            </linearGradient>
-          </defs>
-          <polyline className="chart-area-line" points={makePoints(series)} />
-          <polygon className="chart-area-fill" points={`0,235 ${makePoints(series)} 1000,235`} />
-        </svg>
-        <div className="chart-labels">
-          {visible.filter((_, index) => index % Math.max(1, Math.floor(visible.length / 4)) === 0).slice(0, 4).map((item) => (
-            <span key={item.time}>{formatTaipeiTime(item.time)}</span>
-          ))}
+        <div className="chart-summary">
+          <div>
+            <strong>{current ? series[0] : "--"}{metric === "wind" ? " 級" : metric === "humidity" ? "%" : "°"}</strong>
+            <span>最高 {series.length ? Math.max(...series) : "--"} · 最低 {series.length ? Math.min(...series) : "--"}</span>
+          </div>
+          <WeatherIcon description={current?.weatherDescription} precipitation={current?.precipitationProbability} size={50} />
         </div>
-      </div>
 
-      <div className="rain-title"><strong>降雨機率</strong><b>{rain[0] ?? 0}%</b></div>
-      <div className="line-chart rain-chart" aria-label="逐小時降雨機率曲線圖">
-        <svg viewBox="0 0 1000 250" preserveAspectRatio="none" role="img">
-          <polygon className="rain-fill" points={`0,235 ${makePoints(rain)} 1000,235`} />
-          <polyline className="rain-line" points={makePoints(rain)} />
-        </svg>
-      </div>
+        <div className="line-chart" aria-label="逐小時天氣曲線圖">
+          <svg viewBox="0 0 1000 250" preserveAspectRatio="none" role="img">
+            <defs>
+              <linearGradient id="temperature-fill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stopColor="#d9d9d9" stopOpacity=".75" />
+                <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <polyline className="chart-area-line" points={makePoints(series)} />
+            <polygon className="chart-area-fill" points={`0,235 ${makePoints(series)} 1000,235`} />
+          </svg>
+          <div className="chart-labels">
+            {visible.filter((_, index) => index % Math.max(1, Math.floor(visible.length / 4)) === 0).slice(0, 4).map((item) => (
+              <span key={item.time}>{formatTaipeiTime(item.time)}</span>
+            ))}
+          </div>
+        </div>
 
-      <div className="forecast-facts">
-        <div><Wind /><span>風向</span><strong>{current?.windDirection ?? "--"}</strong></div>
-        <div><ThermometerSun /><span>舒適度</span><strong>{current?.comfortDescription ?? "--"}</strong></div>
+        <div className="rain-title"><strong>降雨機率</strong><b>{rain[0] ?? 0}%</b></div>
+        <div className="line-chart rain-chart" aria-label="逐小時降雨機率曲線圖">
+          <svg viewBox="0 0 1000 250" preserveAspectRatio="none" role="img">
+            <polygon className="rain-fill" points={`0,235 ${makePoints(rain)} 1000,235`} />
+            <polyline className="rain-line" points={makePoints(rain)} />
+          </svg>
+        </div>
+
+        <div className="forecast-facts">
+          <div><Wind /><span>風向</span><strong>{current?.windDirection ?? "--"}</strong></div>
+          <div><ThermometerSun /><span>舒適度</span><strong>{current?.comfortDescription ?? "--"}</strong></div>
+        </div>
       </div>
     </FullSheet>
   );
@@ -266,30 +255,9 @@ function pollutantValue(aqi: AQIObservation, key: "o3" | "pm25" | "pm10" | "co" 
 }
 
 function AqiSheet({ data, onClose }: { data: WeatherBundle; onClose: () => void }) {
-  const [stations, setStations] = useState<AQIObservation[]>([]);
-  const [selected, setSelected] = useState(data.aqi);
-  const [stationLoading, setStationLoading] = useState(false);
-  const info = aqiStatus(selected.aqi);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchAqiStations(controller.signal).then(setStations).catch(() => undefined);
-    return () => controller.abort();
-  }, []);
-
-  async function selectStation(station: AQIObservation) {
-    setStationLoading(true);
-    try {
-      setSelected(await fetchAqiByStation(station.stationId));
-    } catch {
-      setSelected(station);
-    } finally {
-      setStationLoading(false);
-    }
-  }
-
-  const lat = selected.latitude || data.aqi.latitude;
-  const lng = selected.longitude || data.aqi.longitude;
+  const selected = data.aqi;
+  const lat = selected.latitude;
+  const lng = selected.longitude;
   const delta = 0.018;
   const mapUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${lng - delta}%2C${lat - delta}%2C${lng + delta}%2C${lat + delta}&layer=mapnik&marker=${lat}%2C${lng}`;
 
@@ -303,11 +271,7 @@ function AqiSheet({ data, onClose }: { data: WeatherBundle; onClose: () => void 
   ];
 
   return (
-    <FullSheet title="空氣品質" onClose={onClose}>
-      <div className="aqi-detail-score">
-        <div><i style={{ background: info.color }} /><strong>{selected.aqi}</strong><span>{info.label}</span></div>
-        <p>{info.advice} · {info.detail}</p>
-      </div>
+    <FullSheet title="空氣品質" onClose={onClose} className="aqi-native-sheet">
       <div className="detail-title-row"><h3>污染物</h3><span>{formatTaipeiTime(selected.publishedAt ?? data.observation.observedAt, true)}</span></div>
       <div className="pollutant-grid">
         {pollutantCards.map(([label, value, symbol, unit]) => (
@@ -320,27 +284,13 @@ function AqiSheet({ data, onClose }: { data: WeatherBundle; onClose: () => void 
       </div>
 
       <div className="detail-title-row station-heading">
-        <h3>測站資訊</h3><span>全台 {stations.length || "--"} 個測站</span>
+        <h3>測站資訊</h3>
       </div>
       <div className="station-card">
         <span>測站名稱</span>
         <strong>{selected.stationName}</strong>
-        <span>{selected.county}</span>
         <iframe title={`${selected.stationName}地圖`} src={mapUrl} loading="lazy" />
       </div>
-
-      {stations.length ? (
-        <div className="station-picker">
-          <div className="station-picker-title"><strong>切換測站</strong>{stationLoading ? <RefreshCw className="spin" size={15} /> : null}</div>
-          <div>
-            {stations.slice(0, 24).map((station) => (
-              <button type="button" key={`${station.source ?? "epa"}-${station.stationId}-${station.stationName}`} onClick={() => selectStation(station)}>
-                {station.stationName}<span>{station.aqi}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : null}
     </FullSheet>
   );
 }
@@ -355,14 +305,17 @@ function MenuSheet({
   onOpenRadar: () => void;
 }) {
   const items = [
+    { icon: MapPin, title: "我目前的位置", detail: "新增、移除與調整地點順序", action: () => onNavigate("locations") },
+    { icon: Bell, title: "通知設定", detail: "每日天氣摘要與即時動態", action: () => onNavigate("notifications") },
     { icon: CalendarDays, title: "7 日預報", detail: "每日與一週概況", action: () => onNavigate("seven-day") },
     { icon: LineChart, title: "72 小時預報", detail: "溫度、降雨與濕度曲線", action: () => onNavigate("seventy-two") },
     { icon: Gauge, title: "空氣品質", detail: "污染物與全台測站", action: () => onNavigate("aqi") },
+    { icon: Droplets, title: "雨量觀測", detail: "今日逐時與近 30 日雨量", action: () => onNavigate("rainfall") },
+    { icon: ThermometerSun, title: "溫度排行", detail: "今日高溫與即時體感排行", action: () => onNavigate("temperature-ranking") },
     { icon: Map, title: "即時圖資", detail: "雷達、降雨雷達與溫度分布", action: onOpenRadar },
-    { icon: Mountain, title: "更多觀測", detail: "雨量、熱感與高溫排行", action: () => onNavigate("insights") },
   ];
   return (
-    <FullSheet title="天氣功能" onClose={onClose} className="menu-sheet">
+    <FullSheet title="選單" onClose={onClose} className="menu-sheet" presentation="drawer">
       <div className="menu-list">
         {items.map((item) => (
           <button type="button" key={item.title} onClick={item.action}>
@@ -377,84 +330,200 @@ function MenuSheet({
   );
 }
 
-function InsightsSheet({ data, onClose, onOpenRadar }: { data: WeatherBundle; onClose: () => void; onOpenRadar: () => void }) {
-  const [image, setImage] = useState<TemperatureImage | null>(null);
+function RainfallSheet({
+  data,
+  onClose,
+}: {
+  data: WeatherBundle;
+  onClose: () => void;
+}) {
+  const [mode, setMode] = useState<"hourly" | "daily">("hourly");
+  const hourly = data.hourlyRainfall.hourlyRainfall;
+  const daily = data.dailyRainfall.dailyRainfall;
+  const [hourlyIndex, setHourlyIndex] = useState(Math.max(0, hourly.length - 1));
+  const [dailyIndex, setDailyIndex] = useState(Math.max(0, daily.length - 1));
+  const values =
+    mode === "hourly"
+      ? hourly.map((item) => item.precipitation)
+      : daily.map((item) => item.precipitation ?? 0);
+  const maxValue = values.length ? Math.max(...values, 1) : 1;
+  const activeIndex = mode === "hourly" ? hourlyIndex : dailyIndex;
+  const selected =
+    mode === "hourly" ? hourly[hourlyIndex] : daily[dailyIndex];
+  const station =
+    mode === "hourly"
+      ? data.hourlyRainfall.station.stationName
+      : data.dailyRainfall.historicalStation.stationName;
+  const selectedLabel =
+    mode === "hourly"
+      ? selected && "periodEnd" in selected
+        ? formatTaipeiTime(selected.periodEnd, true)
+        : "--"
+      : selected && "date" in selected
+        ? formatDate(selected.date)
+        : "--";
+  const selectedValue =
+    selected && "precipitation" in selected
+      ? selected.precipitation ?? 0
+      : 0;
+
+  return (
+    <FullSheet title="雨量" onClose={onClose} className="rainfall-native-sheet">
+      <div className="rainfall-station">
+        <span>觀測站</span>
+        <strong>{station}</strong>
+      </div>
+      <div className="segmented-control two-column rainfall-mode">
+        <button
+          type="button"
+          className={mode === "hourly" ? "active" : ""}
+          onClick={() => setMode("hourly")}
+        >
+          今日逐時
+        </button>
+        <button
+          type="button"
+          className={mode === "daily" ? "active" : ""}
+          onClick={() => setMode("daily")}
+        >
+          近 30 日
+        </button>
+      </div>
+      <div className="rainfall-selected">
+        <span>{selectedLabel}</span>
+        <strong>{selectedValue}<small>mm</small></strong>
+      </div>
+      <div className={`rainfall-bars ${mode}`}>
+        {values.map((value, index) => (
+          <button
+            type="button"
+            key={mode === "hourly" ? hourly[index]?.periodStart : daily[index]?.date}
+            className={activeIndex === index ? "active" : ""}
+            style={{ "--bar-height": `${Math.max(3, (value / maxValue) * 100)}%` } as React.CSSProperties}
+            aria-label={`${value} mm`}
+            onClick={() => {
+              if (mode === "hourly") setHourlyIndex(index);
+              else setDailyIndex(index);
+            }}
+          >
+            <i />
+          </button>
+        ))}
+      </div>
+      <div className="rainfall-axis">
+        <span>
+          {mode === "hourly"
+            ? `${hourly[0]?.hour ?? 0} 時`
+            : daily[0]?.date.slice(5).replace("-", "/")}
+        </span>
+        <span>{mode === "hourly" ? "現在" : "今天"}</span>
+      </div>
+      <p className="rainfall-note">
+        資料來源為距離目前位置最近且有回報的自動雨量站。
+      </p>
+    </FullSheet>
+  );
+}
+
+function TemperatureRankingSheet({
+  data,
+  onClose,
+}: {
+  data: WeatherBundle;
+  onClose: () => void;
+}) {
   const [rankings, setRankings] = useState<TemperatureRanking[]>([]);
   const [leaderboard, setLeaderboard] = useState<TemperatureLeaderboard | null>(null);
+  const [mode, setMode] = useState<"temperature" | "feels">("temperature");
 
   useEffect(() => {
     const controller = new AbortController();
     Promise.all([
-      fetchTemperatureImage(controller.signal),
       fetchTemperatureRankings(controller.signal),
       fetchTemperatureLeaderboard(controller.signal),
-    ]).then(([nextImage, nextRankings, nextLeaderboard]) => {
-      setImage(nextImage);
+    ]).then(([nextRankings, nextLeaderboard]) => {
       setRankings(nextRankings);
       setLeaderboard(nextLeaderboard);
     }).catch(() => undefined);
     return () => controller.abort();
   }, []);
 
-  const hourlyValues = data.hourlyRainfall.hourlyRainfall.map((item) => item.precipitation);
-  const dailyValues = data.dailyRainfall.dailyRainfall.map((item) => item.precipitation ?? 0);
-  const maxHourly = hourlyValues.length ? Math.max(...hourlyValues) : 0;
-  const maxDaily = dailyValues.length ? Math.max(...dailyValues) : 0;
   const heat = leaderboard?.data.find((item) => item.locationId === data.forecast.locationId) ?? data.heat;
 
   return (
-    <FullSheet title="觀測與排行" onClose={onClose} className="insights-sheet">
-      <section className="insight-section">
-        <div className="insight-heading"><div><Droplets /><h3>今日逐時雨量</h3></div><strong>{data.hourlyRainfall.station.stationName}</strong></div>
-        <div className="bar-chart">
-          {hourlyValues.map((value, index) => (
-            <i key={index} style={{ height: `${Math.max(4, maxHourly ? (value / maxHourly) * 100 : 4)}%` }} title={`${index}時 ${value} mm`} />
-          ))}
-        </div>
-        <div className="chart-meta"><span>0 時</span><span>現在</span></div>
-      </section>
+    <FullSheet
+      title="溫度排行"
+      onClose={onClose}
+      className="temperature-ranking-sheet"
+      headerAction={
+        <button
+          type="button"
+          aria-label="分享溫度排行"
+          onClick={() => {
+            if (navigator.share) {
+              void navigator.share({
+                title: "台灣即時溫度排行",
+                text: `目前 ${heat.displayLocationName} 體感 ${heat.feelsLike}°`,
+                url: window.location.href,
+              });
+            } else {
+              void navigator.clipboard?.writeText(window.location.href);
+            }
+          }}
+        >
+          <Share2 size={20} />
+        </button>
+      }
+    >
+      <div className="segmented-control two-column ranking-mode">
+        <button
+          type="button"
+          className={mode === "temperature" ? "active" : ""}
+          onClick={() => setMode("temperature")}
+        >
+          今日高溫
+        </button>
+        <button
+          type="button"
+          className={mode === "feels" ? "active" : ""}
+          onClick={() => setMode("feels")}
+        >
+          即時體感
+        </button>
+      </div>
 
-      <section className="insight-section">
-        <div className="insight-heading"><div><ArrowDown /><h3>近 30 日雨量</h3></div><strong>最高 {maxDaily} mm</strong></div>
-        <div className="bar-chart daily-bars">
-          {dailyValues.map((value, index) => (
-            <i key={index} style={{ height: `${Math.max(3, maxDaily ? (value / maxDaily) * 100 : 3)}%` }} title={`${value} mm`} />
-          ))}
+      <div className="ranking-current-card">
+        <Flame />
+        <div>
+          <span>{heat.displayLocationName}</span>
+          <strong>{heat.feelsLike}°</strong>
+          <small>{heat.rank > 0 ? heat.rankText : heat.subtitle ?? heat.rankText}</small>
         </div>
-        <div className="chart-meta"><span>{data.dailyRainfall.dateRange.start.slice(5).replace("-", "/")}</span><span>{data.dailyRainfall.dateRange.end.slice(5).replace("-", "/")}</span></div>
-      </section>
+      </div>
 
-      <section className="heat-card-detail">
-        <div><Flame /><span>目前體感</span><strong>{heat.feelsLike}°</strong></div>
-        <div className="heat-copy">
-          <span>{heat.rankText} · 擊敗 {heat.overtakesPercent}% 地區</span>
-          <strong>{heat.subtitle ?? heat.beatText}</strong>
-          <p>{heat.displayLocationName} · 實際溫度 {heat.temperature}°</p>
-        </div>
-      </section>
-
-      {image ? (
-        <section className="temperature-map-card">
-          <div className="insight-heading"><div><ThermometerSun /><h3>全台溫度分布</h3></div><strong>{formatTaipeiTime(image.dateTime)}</strong></div>
-          <button type="button" onClick={onOpenRadar}>
-            <img src={image.r2Url ?? image.url ?? ""} alt="全台即時溫度分布圖" />
-            <span>在圖資中查看 <ChevronRight size={18} /></span>
-          </button>
-        </section>
-      ) : null}
-
-      <section className="ranking-section">
-        <div className="insight-heading"><div><Flame /><h3>全台高溫排行</h3></div><strong>前 100 站</strong></div>
-        <div className="ranking-list">
-          {rankings.slice(0, 10).map((item) => (
-            <div key={item.stationId}>
-              <b>#{item.rank}</b>
-              <div><strong>{item.stationName}</strong><span>{item.address}</span></div>
-              <em>{item.temperatureC}°</em>
-            </div>
-          ))}
-        </div>
-      </section>
+      <div className="native-ranking-list">
+        {mode === "temperature"
+          ? rankings.slice(0, 100).map((item) => (
+              <div key={item.stationId}>
+                <b>{item.rank}</b>
+                <div>
+                  <strong>{item.stationName}</strong>
+                  <span>{item.address}</span>
+                </div>
+                <em>{item.temperatureC}°</em>
+              </div>
+            ))
+          : leaderboard?.data.slice(0, 100).map((item) => (
+              <div key={item.locationId}>
+                <b>{item.rank}</b>
+                <div>
+                  <strong>{item.displayLocationName}</strong>
+                  <span>實際溫度 {item.temperature}°</span>
+                </div>
+                <em>{item.feelsLike}°</em>
+              </div>
+            ))}
+      </div>
     </FullSheet>
   );
 }
@@ -464,7 +533,8 @@ export function DetailSheets({ active, data, onClose, onOpenRadar, onNavigate }:
     if (active === "seven-day") return <SevenDaySheet data={data} onClose={onClose} />;
     if (active === "seventy-two") return <SeventyTwoSheet data={data} onClose={onClose} />;
     if (active === "aqi") return <AqiSheet data={data} onClose={onClose} />;
-    if (active === "insights") return <InsightsSheet data={data} onClose={onClose} onOpenRadar={onOpenRadar} />;
+    if (active === "rainfall") return <RainfallSheet data={data} onClose={onClose} />;
+    if (active === "temperature-ranking") return <TemperatureRankingSheet data={data} onClose={onClose} />;
     if (active === "menu") return <MenuSheet onClose={onClose} onNavigate={onNavigate} onOpenRadar={onOpenRadar} />;
     return null;
   }, [active, data, onClose, onOpenRadar, onNavigate]);

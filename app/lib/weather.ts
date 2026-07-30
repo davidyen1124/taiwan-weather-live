@@ -179,6 +179,40 @@ export type RadarFrame = {
   height?: number;
 };
 
+export type WeatherAdvisoryArea = {
+  name: string;
+  geocode: string;
+  locationId: string;
+};
+
+export type WeatherAdvisory = {
+  id: string;
+  type: "rain" | "high_temperature" | string;
+  category: string;
+  event: string;
+  title: string;
+  headline: string;
+  severity: string;
+  severityLevel: string;
+  color: string;
+  websiteColor: string;
+  effectiveAt: string;
+  onsetAt: string;
+  expiresAt: string;
+  senderName: string;
+  description: string;
+  instruction: string;
+  webUrl?: string | null;
+  areas: WeatherAdvisoryArea[];
+};
+
+export type WeatherAdvisoriesResponse = {
+  data: {
+    advisories: WeatherAdvisory[];
+    byType: Record<string, WeatherAdvisory[]>;
+  };
+};
+
 export type WeatherBundle = {
   observation: WeatherObservation;
   forecast: WeatherForecast;
@@ -217,13 +251,33 @@ export async function fetchWeatherBundle(
     getJson<DailyRainfall>(`/rainfall/daily?${query}`, signal),
   ]);
 
-  const forecast = await forecastPromise;
+  const [forecast, [observation, aqi, hourlyRainfall, dailyRainfall]] =
+    await Promise.all([forecastPromise, independentPromise]);
   const heatPromise = getJson<HeatCard>(
     `/weather/heat-card?locationId=${forecast.locationId}`,
     signal,
-  );
-  const [[observation, aqi, hourlyRainfall, dailyRainfall], heat] =
-    await Promise.all([independentPromise, heatPromise]);
+  ).catch((error: unknown) => {
+    if ((error as Error)?.name === "AbortError") throw error;
+    const current = forecast.hourly[0];
+    return {
+      locationId: forecast.locationId,
+      city: forecast.city ?? "",
+      district: forecast.locationName,
+      displayLocationName: forecast.locationName,
+      rank: 0,
+      rankText: "山岳預報",
+      total: 151,
+      overtakesPercent: 0,
+      beatText: "山岳地點",
+      beatHighlightText: forecast.locationName,
+      temperature: current?.temperature ?? 0,
+      feelsLike: current?.feelsLike ?? current?.temperature ?? 0,
+      observedAt: current?.time ?? new Date().toISOString(),
+      forecastTime: current?.time ?? new Date().toISOString(),
+      subtitle: "山岳地點不提供全台熱感排行",
+    };
+  });
+  const heat = await heatPromise;
 
   return { observation, forecast, aqi, hourlyRainfall, dailyRainfall, heat };
 }
@@ -270,6 +324,44 @@ export async function fetchRadarFrames(
     signal,
   );
   return response.data.toReversed();
+}
+
+export async function fetchWeatherAdvisories(signal?: AbortSignal) {
+  const response = await getJson<WeatherAdvisoriesResponse>(
+    "/weather/advisories",
+    signal,
+  );
+  return response.data.advisories;
+}
+
+const FEELS_LIKE_COLOR_STOPS = [
+  { temperature: -20, color: [74, 123, 219] },
+  { temperature: -5, color: [59, 170, 231] },
+  { temperature: 10, color: [66, 196, 177] },
+  { temperature: 25, color: [251, 191, 68] },
+  { temperature: 33, color: [255, 142, 58] },
+  { temperature: 38, color: [240, 78, 70] },
+  { temperature: 40, color: [176, 48, 82] },
+] as const;
+
+export function feelsLikeTemperatureColor(value: number | null | undefined) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "#ff9841";
+  const first = FEELS_LIKE_COLOR_STOPS[0];
+  const last = FEELS_LIKE_COLOR_STOPS.at(-1)!;
+  if (value <= first.temperature) return `rgb(${first.color.join(" ")})`;
+  if (value >= last.temperature) return `rgb(${last.color.join(" ")})`;
+
+  const upperIndex = FEELS_LIKE_COLOR_STOPS.findIndex(
+    (stop) => value <= stop.temperature,
+  );
+  const lower = FEELS_LIKE_COLOR_STOPS[upperIndex - 1];
+  const upper = FEELS_LIKE_COLOR_STOPS[upperIndex];
+  const progress =
+    (value - lower.temperature) / (upper.temperature - lower.temperature);
+  const color = lower.color.map((channel, index) =>
+    Math.round(channel + (upper.color[index] - channel) * progress),
+  );
+  return `rgb(${color.join(" ")})`;
 }
 
 export const DEFAULT_COORDS: Coordinates = {

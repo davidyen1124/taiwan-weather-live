@@ -1,11 +1,12 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element -- Remote radar rasters must stay pixel-aligned over the live map. */
+
 import { useEffect, useMemo, useState } from "react";
 import {
   Check,
   ChevronUp,
   CloudRain,
-  House,
   Layers3,
   Map,
   Pause,
@@ -19,6 +20,7 @@ import {
   fetchTemperatureImage,
   formatTaipeiTime,
 } from "../lib/weather";
+import { BottomNavigation, type RootView } from "./BottomNavigation";
 
 type Mode = "radar" | "temperature" | "rainfall";
 
@@ -29,9 +31,9 @@ const RADAR_TYPES = {
   linyuan: "rainfall_radar_linyuan",
 } as const;
 
-type Props = { onHome: () => void };
+type Props = { onNavigate: (view: RootView) => void };
 
-export function RadarView({ onHome }: Props) {
+export function RadarView({ onNavigate }: Props) {
   const [mode, setMode] = useState<Mode>("radar");
   const [rainfallType, setRainfallType] = useState<"shulin" | "nantun" | "linyuan">("shulin");
   const [duration, setDuration] = useState(1);
@@ -44,7 +46,10 @@ export function RadarView({ onHome }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const activeType = mode === "rainfall" ? RADAR_TYPES[rainfallType] : RADAR_TYPES.radar;
-  const allFrames = framesByType[activeType] ?? [];
+  const allFrames = useMemo(
+    () => framesByType[activeType] ?? [],
+    [activeType, framesByType],
+  );
   const frames = useMemo(
     () => allFrames.slice(-Math.min(allFrames.length, duration * 6 + 1)),
     [allFrames, duration],
@@ -54,7 +59,6 @@ export function RadarView({ onHome }: Props) {
 
   useEffect(() => {
     const controller = new AbortController();
-    setLoading(true);
     Promise.all([
       fetchRadarFrames(RADAR_TYPES.radar, 73, controller.signal),
       fetchRadarFrames(RADAR_TYPES.shulin, 73, controller.signal),
@@ -195,14 +199,7 @@ export function RadarView({ onHome }: Props) {
         )}
       </section>
 
-      <nav className="bottom-nav map-bottom-nav" aria-label="主要導覽">
-        <button type="button" onClick={onHome}>
-          <span><House size={24} fill="currentColor" /></span>天氣
-        </button>
-        <button type="button" className="active" aria-current="page">
-          <span><Map size={25} fill="currentColor" /></span>圖資
-        </button>
-      </nav>
+      <BottomNavigation active="radar" onNavigate={onNavigate} />
     </main>
   );
 }
