@@ -14,12 +14,14 @@ import { RadarView } from "./RadarView";
 import { WeatherHome, type SheetName } from "./WeatherHome";
 import { WeatherAdvisories } from "./WeatherAdvisories";
 import type { RootView } from "./BottomNavigation";
+import { WeatherNotifications } from "./WeatherNotifications";
 
 export function WeatherApp() {
   const [data, setData] = useState<WeatherBundle | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [coords, setCoords] = useState<Coordinates>(DEFAULT_COORDS);
+  const [forecastDate, setForecastDate] = useState<string | undefined>();
   const [sheet, setSheet] = useState<SheetName | null>(null);
   const [view, setView] = useState<RootView>("home");
   const [locations, setLocations] = useState<SavedWeatherLocation[]>(
@@ -80,14 +82,14 @@ export function WeatherApp() {
 
   useEffect(() => {
     if (!locationsReady) return;
-    window.localStorage.setItem(
+    try { window.localStorage.setItem(
       "taiwan-weather.locations.v1",
       JSON.stringify({
         version: 1,
         locations,
         selectedLocationId,
       }),
-    );
+    ); } catch { /* Weather remains usable when storage is disabled. */ }
   }, [locations, locationsReady, selectedLocationId]);
 
   useEffect(() => {
@@ -97,8 +99,7 @@ export function WeatherApp() {
 
   const locate = useCallback(() => {
     if (!navigator.geolocation) {
-      setError("此瀏覽器不支援定位，已顯示臺北市大安區。");
-      void loadWeather(DEFAULT_COORDS);
+      void loadWeather(DEFAULT_COORDS).then(() => setError("此瀏覽器不支援定位，顯示臺北市大安區。"));
       return;
     }
     navigator.geolocation.getCurrentPosition(
@@ -109,8 +110,7 @@ export function WeatherApp() {
         });
       },
       () => {
-        setError("未取得定位權限，已繼續顯示臺北市大安區。");
-        void loadWeather(DEFAULT_COORDS);
+        void loadWeather(DEFAULT_COORDS).then(() => setError("未取得定位權限，顯示臺北市大安區。"));
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 },
     );
@@ -167,15 +167,18 @@ export function WeatherApp() {
     setView(nextView);
   }, []);
 
-  const openSheet = useCallback((nextSheet: SheetName) => {
+  const openSheet = useCallback((nextSheet: SheetName, date?: string) => {
+    setForecastDate(date);
     setSheet(nextSheet);
   }, []);
 
   return (
     <div className="app-stage">
       <div className="phone-app">
+        <WeatherNotifications data={data} />
+        <div inert={sheet !== null}>
         {view === "radar" ? (
-          <RadarView onNavigate={navigateRoot} />
+          <RadarView onNavigate={navigateRoot} coordinates={coords} />
         ) : view === "advisories" ? (
           <WeatherAdvisories onNavigate={navigateRoot} />
         ) : (
@@ -186,10 +189,15 @@ export function WeatherApp() {
             onRefresh={() => loadWeather(coords)}
             onOpenSheet={openSheet}
             onNavigate={navigateRoot}
+            locations={locations}
+            selectedLocationId={selectedLocationId}
+            onSelectLocation={id => { const location = locations.find(l => l.id === id); if (location) selectLocation(location); }}
           />
         )}
+        </div>
         {view === "home" && data ? (
           <DetailSheets
+            initialDate={forecastDate}
             active={sheet}
             data={data}
             onClose={() => setSheet(null)}

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef } from "react";
 
 function taipeiHour(isoDate: string) {
+  if (!isoDate || Number.isNaN(Date.parse(isoDate))) isoDate = new Date().toISOString();
   const parts = new Intl.DateTimeFormat("en-US", {
     hour: "2-digit",
     hour12: false,
@@ -57,7 +58,7 @@ export function WeatherHero({
           container,
           renderer: "svg",
           loop: true,
-          autoplay: true,
+          autoplay: !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
           animationData,
           rendererSettings: {
             preserveAspectRatio: "xMidYMid meet",

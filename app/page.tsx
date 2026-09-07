@@ -1,5 +1,6 @@
 import { WeatherApp } from "./components/WeatherApp";
+import { PreferencesProvider } from "./components/PreferencesProvider";
 
 export default function Home() {
-  return <WeatherApp />;
+  return <PreferencesProvider><WeatherApp /></PreferencesProvider>;
 }

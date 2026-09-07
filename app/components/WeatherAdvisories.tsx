@@ -144,7 +144,7 @@ export function WeatherAdvisories({
           <div className="advisory-empty-state">
             <Check size={36} />
             <strong>目前沒有生效中的警特報</strong>
-            <span>天氣平穩，仍建議出門前查看最新預報。</span>
+            <span>出門前仍建議查看最新預報。</span>
           </div>
         )}
       </div>

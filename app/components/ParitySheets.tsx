@@ -14,6 +14,7 @@ import {
   Plus,
   Search,
   Smartphone,
+  Palette,
   Trash2,
 } from "lucide-react";
 import {
@@ -28,6 +29,9 @@ import {
   type SavedWeatherLocation,
   type SearchableWeatherLocation,
 } from "../lib/locations";
+import { usePreferences } from "./PreferencesProvider";
+import { forecastDigest } from "./WeatherNotifications";
+import { HOME_SECTIONS, SECTION_LABELS, moveSection } from "../lib/preferences";
 import type { WeatherBundle } from "../lib/weather";
 import { FullSheet } from "./FullSheet";
 import type { SheetName } from "./WeatherHome";
@@ -216,10 +220,10 @@ function LocationSearchSheet({
       .trim()
       .replaceAll("臺", "台")
       .replaceAll(/\s+/g, "");
-    if (!normalized) return source.slice(0, category === "district" ? 40 : 151);
+    if (!normalized) return source;
     return source
       .filter((location) => location.searchText.includes(normalized))
-      .slice(0, 100);
+      ;
   }, [category, deferredQuery]);
 
   function addLocation(location: SearchableWeatherLocation) {
@@ -359,70 +363,44 @@ function Toggle({
   );
 }
 
-function NotificationSettingsSheet({ onClose }: Pick<Props, "onClose">) {
-  const [digestEnabled, setDigestEnabled] = useState(true);
-  const [liveActivityEnabled, setLiveActivityEnabled] = useState(true);
-  const [digestTime, setDigestTime] = useState("07:30");
+function NotificationSettingsSheet({ onClose, data }: Pick<Props, "onClose" | "data">) {
+  const { preferences, update } = usePreferences();
+  const [status, setStatus] = useState("");
+  const preview = forecastDigest(data);
+  async function enable(key: "digest" | "advisoryNotifications", value: boolean) {
+    if (!value) { update({ [key]: false }); return; }
+    if (!("Notification" in window)) { setStatus("此瀏覽器不支援通知，請在警特報頁查看最新資訊。"); return; }
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") { setStatus("尚未允許通知。你可以在瀏覽器的網站設定中調整權限。"); return; }
+      update({ [key]: true }); setStatus("通知已開啟；請保持此網頁開啟。");
+    } catch { setStatus("此瀏覽器無法啟用通知。"); }
+  }
+  return <FullSheet title="通知設定" onClose={onClose} className="settings-sheet">
+    <div className="settings-section"><h3>天氣摘要</h3><div className="settings-group">
+      <div className="settings-row"><span className="settings-icon blue"><Bell size={19} /></span><div><strong>每日天氣摘要</strong><small>使用此裝置的當地時間</small></div><Toggle checked={preferences.digest} onChange={value => void enable("digest", value)} label="每日天氣摘要" /></div>
+      <label className={`settings-row ${preferences.digest ? "" : "disabled"}`}><span className="settings-icon orange"><Clock3 size={19} /></span><div><strong>通知時間</strong></div><input aria-label="通知時間" type="time" value={preferences.digestTime} disabled={!preferences.digest} onChange={event => update({ digestTime: event.target.value })} /></label>
+      </div><p>通知會在網頁保持開啟且瀏覽器支援時送出；關閉網頁後不會背景推播。</p></div>
+    <div className="settings-section"><h3>即時資訊</h3><div className="settings-group"><div className="settings-row"><span className="settings-icon orange"><Bell size={19} /></span><div><strong>天氣警特報通知</strong><small>所選地點的最新警特報</small></div><Toggle checked={preferences.advisoryNotifications} onChange={value => void enable("advisoryNotifications", value)} label="天氣警特報通知" /></div></div></div>
+    {status ? <p className="inline-notice" role="status">{status}</p> : null}
+    <div className="notification-preview"><span>天氣摘要預覽</span><strong>{preview.title}</strong><p>{preview.body}</p></div>
+    <div className="settings-section"><h3>iPhone 與 Apple Watch</h3><div className="settings-group"><div className="settings-row"><span className="settings-icon purple"><Smartphone size={19} /></span><div><strong>桌面小工具與即時動態</strong><small>需使用原生 iOS App，網頁不支援這些系統功能。</small></div></div></div><p><a href="https://apps.apple.com/tw/app/id6762736722" target="_blank" rel="noreferrer">查看原生 App</a></p></div>
+  </FullSheet>;
+}
 
-  return (
-    <FullSheet title="通知設定" onClose={onClose} className="settings-sheet">
-      <div className="settings-section">
-        <h3>天氣摘要</h3>
-        <div className="settings-group">
-          <div className="settings-row">
-            <span className="settings-icon blue"><Bell size={19} /></span>
-            <div>
-              <strong>每日天氣摘要</strong>
-              <small>在指定時間顯示今日天氣</small>
-            </div>
-            <Toggle
-              checked={digestEnabled}
-              onChange={setDigestEnabled}
-              label="每日天氣摘要"
-            />
-          </div>
-          <label className={`settings-row ${digestEnabled ? "" : "disabled"}`}>
-            <span className="settings-icon orange"><Clock3 size={19} /></span>
-            <div><strong>通知時間</strong></div>
-            <input
-              type="time"
-              value={digestTime}
-              disabled={!digestEnabled}
-              onChange={(event) => setDigestTime(event.target.value)}
-            />
-          </label>
-        </div>
-        <p>開啟後，瀏覽器會依照你的通知權限顯示天氣摘要。</p>
-      </div>
+function AppearanceSheet({ onClose }: Pick<Props, "onClose">) {
+  const { preferences, update } = usePreferences();
+  return <FullSheet title="外觀" onClose={onClose}><div className="settings-section"><h3>顯示模式</h3><div className="settings-group">{([["system", "跟隨系統"], ["light", "淺色"], ["dark", "深色"]] as const).map(([theme, label]) => <button className="settings-row preference-choice" type="button" key={theme} aria-pressed={preferences.theme === theme} onClick={() => update({ theme })}><Palette size={20} /><strong>{label}</strong>{preferences.theme === theme ? <Check size={20} /> : null}</button>)}</div></div></FullSheet>;
+}
 
-      <div className="settings-section">
-        <h3>即時資訊</h3>
-        <div className="settings-group">
-          <div className="settings-row">
-            <span className="settings-icon purple"><Smartphone size={19} /></span>
-            <div>
-              <strong>即時動態</strong>
-              <small>在支援的裝置上顯示最新天氣</small>
-            </div>
-            <Toggle
-              checked={liveActivityEnabled}
-              onChange={setLiveActivityEnabled}
-              label="即時動態"
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="notification-preview">
-        <span>天氣預報</span>
-        <strong>早安，今天 30°／25°</strong>
-        <p>白天多雲，午後有短暫雷陣雨，出門記得帶傘。</p>
-      </div>
-    </FullSheet>
-  );
+function HomeOrderSheet({ onClose }: Pick<Props, "onClose">) {
+  const { preferences, update } = usePreferences();
+  return <FullSheet title="自訂首頁排序" onClose={onClose} headerAction={<button type="button" className="sheet-text-action" onClick={() => update({ order: [...HOME_SECTIONS], hidden: [] })}>重設</button>}><p className="source-note">調整卡片順序，或關閉不需要的項目。</p><div className="settings-group">{preferences.order.map((id, index) => <div className="home-order-row" key={id}><GripVertical size={20} /><strong>{SECTION_LABELS[id]}</strong><div className="location-edit-controls"><button type="button" aria-label={`上移${SECTION_LABELS[id]}`} disabled={index === 0} onClick={() => update({ order: moveSection(preferences.order, id, -1) })}><ArrowUp size={16} /></button><button type="button" aria-label={`下移${SECTION_LABELS[id]}`} disabled={index === preferences.order.length - 1} onClick={() => update({ order: moveSection(preferences.order, id, 1) })}><ArrowDown size={16} /></button></div><Toggle label={`顯示${SECTION_LABELS[id]}`} checked={!preferences.hidden.includes(id)} onChange={show => update({ hidden: show ? preferences.hidden.filter(item => item !== id) : [...preferences.hidden, id] })} /></div>)}</div></FullSheet>;
 }
 
 export function ParitySheets(props: Props) {
+  if (props.active === "appearance") return <AppearanceSheet onClose={props.onClose} />;
+  if (props.active === "home-order") return <HomeOrderSheet onClose={props.onClose} />;
   if (props.active === "locations") {
     return <LocationManagerSheet {...props} />;
   }
@@ -430,7 +408,7 @@ export function ParitySheets(props: Props) {
     return <LocationSearchSheet {...props} />;
   }
   if (props.active === "notifications") {
-    return <NotificationSettingsSheet onClose={props.onClose} />;
+    return <NotificationSettingsSheet onClose={props.onClose} data={props.data} />;
   }
   return null;
 }

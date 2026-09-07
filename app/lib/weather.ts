@@ -214,6 +214,7 @@ export type WeatherAdvisoriesResponse = {
 };
 
 export type WeatherBundle = {
+  unavailable?: string[];
   observation: WeatherObservation;
   forecast: WeatherForecast;
   aqi: AQIObservation;
@@ -224,7 +225,7 @@ export type WeatherBundle = {
 
 async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
-    signal,
+    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(20000)]) : AbortSignal.timeout(20000),
     headers: { Accept: "application/json" },
   });
   if (!response.ok) throw new Error(`Weather API ${response.status}`);
@@ -240,15 +241,21 @@ export async function fetchWeatherBundle(
   signal?: AbortSignal,
 ): Promise<WeatherBundle> {
   const query = coordinateQuery(coords);
+  const unavailable: string[] = [];
+  const optional = async <T>(path: string, label: string, fallback: T) => {
+    try { return await getJson<T>(path, signal); }
+    catch (error) { if (signal?.aborted) throw error; unavailable.push(label); return fallback; }
+  };
+  const missingStation: RainfallStation = { stationId: "", stationName: "暫無測站資料", ...coords, distanceKm: 0 };
   const forecastPromise = getJson<WeatherForecast>(
     `/weather/forecast?${query}`,
     signal,
   );
   const independentPromise = Promise.all([
-    getJson<WeatherObservation>(`/weather/observation?${query}`, signal),
-    getJson<AQIObservation>(`/aqi?${query}`, signal),
-    getJson<HourlyRainfall>(`/rainfall/hourly?${query}`, signal),
-    getJson<DailyRainfall>(`/rainfall/daily?${query}`, signal),
+    optional<WeatherObservation>(`/weather/observation?${query}`, "即時觀測", { stationId: "", stationName: "暫無測站資料", county: "", township: "", temperature: -99, humidity: -99, windSpeed: -99, windDirection: -99, airPressure: -99, observedAt: "" }),
+    optional<AQIObservation>(`/aqi?${query}`, "空氣品質", { stationId: "", stationName: "暫無測站資料", county: "", ...coords, aqi: -1 }),
+    optional<HourlyRainfall>(`/rainfall/hourly?${query}`, "逐時雨量", { date: "", timezone: "Asia/Taipei", station: missingStation, hourlyRainfall: [] }),
+    optional<DailyRainfall>(`/rainfall/daily?${query}`, "歷史雨量", { dateRange: { start: "", end: "", timezone: "Asia/Taipei" }, historicalStation: missingStation, dailyRainfall: [] }),
   ]);
 
   const [forecast, [observation, aqi, hourlyRainfall, dailyRainfall]] =
@@ -265,21 +272,21 @@ export async function fetchWeatherBundle(
       district: forecast.locationName,
       displayLocationName: forecast.locationName,
       rank: 0,
-      rankText: "山岳預報",
-      total: 151,
+      rankText: "暫無排行資料",
+      total: 0,
       overtakesPercent: 0,
-      beatText: "山岳地點",
+      beatText: "暫無排行資料",
       beatHighlightText: forecast.locationName,
       temperature: current?.temperature ?? 0,
       feelsLike: current?.feelsLike ?? current?.temperature ?? 0,
       observedAt: current?.time ?? new Date().toISOString(),
       forecastTime: current?.time ?? new Date().toISOString(),
-      subtitle: "山岳地點不提供全台熱感排行",
+      subtitle: "此地點暫無全台熱感排行",
     };
   });
   const heat = await heatPromise;
 
-  return { observation, forecast, aqi, hourlyRainfall, dailyRainfall, heat };
+  return { observation, forecast, aqi, hourlyRainfall, dailyRainfall, heat, unavailable };
 }
 
 export function fetchAqiStations(signal?: AbortSignal) {
@@ -393,16 +400,42 @@ export function formatDate(value: string) {
 }
 
 export function aqiStatus(value: number) {
+  if (!Number.isFinite(value) || value < 0)
+    return { label: "暫無資料", color: "#8e8e93", advice: "請稍後更新", detail: "測站尚未回報有效的空氣品質資料" };
   if (value <= 50)
     return { label: "良好", color: "#72df68", advice: "適合外出", detail: "適合慢跑、騎車等戶外運動" };
   if (value <= 100)
     return { label: "普通", color: "#f5cf57", advice: "正常活動", detail: "敏感族群建議留意身體狀況" };
   if (value <= 150)
     return { label: "對敏感族群不健康", color: "#ff9f43", advice: "減少久待", detail: "敏感族群請減少長時間戶外活動" };
-  return { label: "不健康", color: "#ee5f5b", advice: "減少外出", detail: "建議配戴口罩並避免劇烈活動" };
+  if (value <= 200) return { label: "不健康", color: "#ee5f5b", advice: "減少外出", detail: "留意最新空品資訊，減少長時間戶外活動" };
+  if (value <= 300) return { label: "非常不健康", color: "#a568b6", advice: "留意空品警示", detail: "請參考環境部最新空氣品質提醒" };
+  return { label: "危害", color: "#8b3653", advice: "留意空品警示", detail: "請參考環境部最新空氣品質提醒" };
+}
+
+// CWA missing-observation sentinels must never be displayed as measurements.
+export function reading(value: number | null | undefined, nonnegative = false): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value > -90 && (!nonnegative || value >= 0) ? value : null;
+}
+
+export function uvCategory(value: number | null) {
+  if (value === null) return "";
+  if (value < 3) return "低量級";
+  if (value < 6) return "中量級";
+  if (value < 8) return "高量級";
+  if (value < 11) return "過量級";
+  return "危險級";
+}
+
+export function framesWithinHours(frames: RadarFrame[], hours: number): RadarFrame[] {
+  const latest = frames.at(-1);
+  if (!latest) return [];
+  const start = new Date(latest.dateTime).getTime() - hours * 3600000;
+  return frames.filter(frame => new Date(frame.dateTime).getTime() >= start);
 }
 
 export function windDirectionText(degrees: number) {
+  if (reading(degrees, true) === null) return "風向暫無資料";
   const labels = ["北風", "東北風", "東風", "東南風", "南風", "西南風", "西風", "西北風"];
   return labels[Math.round(degrees / 45) % 8];
 }

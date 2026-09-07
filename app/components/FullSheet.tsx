@@ -23,6 +23,27 @@ export function FullSheet({
   closePosition = "left",
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    const dialog = dialogRef.current;
+    const focusable = () => Array.from(dialog?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), a[href], [tabindex="0"]') ?? []);
+    focusable()[0]?.focus();
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { event.preventDefault(); closeRef.current(); }
+      if (event.key !== "Tab") return;
+      const items = focusable();
+      if (!items.length) { event.preventDefault(); return; }
+      const first = items[0], last = items.at(-1)!;
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    dialog?.addEventListener("keydown", keydown);
+    return () => { dialog?.removeEventListener("keydown", keydown); if (previous?.isConnected) previous.focus(); };
+  }, []);
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
@@ -31,6 +52,7 @@ export function FullSheet({
   return (
     <div className={`sheet-backdrop ${presentation === "drawer" ? "drawer-backdrop" : ""}`}>
       <section
+        ref={dialogRef}
         className={`detail-sheet ${className}`}
         role="dialog"
         aria-modal="true"

@@ -12,6 +12,8 @@ import {
   Map,
   MapPin,
   Share2,
+  Palette,
+  ListOrdered,
   ThermometerSun,
   Wind,
 } from "lucide-react";
@@ -26,13 +28,16 @@ import {
   fetchTemperatureLeaderboard,
   fetchTemperatureRankings,
   formatDate,
+  reading,
   formatTaipeiTime,
 } from "../lib/weather";
 import type { SheetName } from "./WeatherHome";
 import { FullSheet } from "./FullSheet";
+import { ForecastChart } from "./ForecastChart";
 import { WeatherIcon } from "./WeatherIcon";
 
 type Props = {
+  initialDate?: string;
   active: SheetName | null;
   data: WeatherBundle;
   onClose: () => void;
@@ -95,8 +100,8 @@ function SegmentCard({ segment }: { segment?: DailyForecastSegment }) {
   );
 }
 
-function SevenDaySheet({ data, onClose }: { data: WeatherBundle; onClose: () => void }) {
-  const [selected, setSelected] = useState(data.forecast.daily[0]?.date ?? "");
+function SevenDaySheet({ data, onClose, initialDate }: { data: WeatherBundle; onClose: () => void; initialDate?: string }) {
+  const [selected, setSelected] = useState(initialDate ?? data.forecast.daily[0]?.date ?? "");
   const [mode, setMode] = useState<"daily" | "overview">("daily");
   const day = data.forecast.daily.find((item) => item.date === selected) ?? data.forecast.daily[0];
   const segments = data.forecast.dailySegments.filter((item) => item.date === selected);
@@ -139,36 +144,26 @@ function SevenDaySheet({ data, onClose }: { data: WeatherBundle; onClose: () => 
   );
 }
 
-function makePoints(values: number[], width = 1000, height = 220, pad = 14) {
-  if (!values.length) return "";
-  let min = values[0];
-  let max = values[0];
-  for (const value of values) {
-    if (value < min) min = value;
-    if (value > max) max = value;
-  }
-  const range = max - min || 1;
-  return values.map((value, index) => {
-    const x = values.length === 1 ? 0 : (index / (values.length - 1)) * width;
-    const y = pad + ((max - value) / range) * (height - pad * 2);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(" ");
-}
-
 function SeventyTwoSheet({ data, onClose }: { data: WeatherBundle; onClose: () => void }) {
-  const dates = Array.from(new Set(data.forecast.hourly.map((item) => item.time.slice(0, 10))));
+  const firstTime = Date.parse(data.forecast.hourly[0]?.time ?? "");
+  const next72 = data.forecast.hourly.filter(item => Date.parse(item.time) < firstTime + 72 * 3600000);
+  const dates = Array.from(new Set(next72.map((item) => item.time.slice(0, 10))));
   const [selectedDate, setSelectedDate] = useState(dates[0] ?? "");
   const [metric, setMetric] = useState<"temperature" | "feels" | "wind" | "humidity">("temperature");
   const touchStartX = useRef<number | null>(null);
-  const visible = data.forecast.hourly.filter((item) => item.time.slice(0, 10) === selectedDate);
+  const [selectedHour, setSelectedHour] = useState(0);
+  const visible = next72.filter((item) => item.time.slice(0, 10) === selectedDate);
   const series = visible.map((item) => {
     if (metric === "feels") return item.feelsLike;
-    if (metric === "wind") return Number(item.beaufortScale);
+    if (metric === "wind") return Number.parseFloat(item.beaufortScale);
     if (metric === "humidity") return item.humidity;
     return item.temperature;
   });
+  const validSeries = series.map(v => reading(v)).filter(v => v !== null);
   const rain = visible.map((item) => item.precipitationProbability);
-  const current = visible[0];
+  const hourIndex = Math.min(selectedHour, Math.max(0, visible.length - 1));
+  const current = visible[hourIndex];
+  const chartTimes = visible.map(item => `${Number(formatTaipeiTime(item.time).slice(0, 2))}時`);
   const visibleDates = dates.slice(0, 5);
 
   function selectAdjacentDate(direction: -1 | 1) {
@@ -181,15 +176,15 @@ function SeventyTwoSheet({ data, onClose }: { data: WeatherBundle; onClose: () =
   }
 
   return (
-    <FullSheet title="72 小時預報" onClose={onClose} className="chart-sheet">
-      <DayTabs dates={visibleDates} selected={selectedDate} onSelect={setSelectedDate} />
+    <FullSheet title="72 小時預報" onClose={onClose} className="chart-sheet" closePosition="right">
+      <DayTabs dates={visibleDates} selected={selectedDate} onSelect={date => { setSelectedDate(date); setSelectedHour(0); }} />
       <div
         className="forecast-day-page"
         onTouchStart={(event) => {
           touchStartX.current = event.touches[0]?.clientX ?? null;
         }}
         onTouchEnd={(event) => {
-          if (touchStartX.current === null) return;
+          if (touchStartX.current === null || (event.target as Element).closest(".interactive-forecast-chart")) return;
           const distance = event.changedTouches[0]?.clientX - touchStartX.current;
           touchStartX.current = null;
           if (Math.abs(distance) < 48) return;
@@ -197,7 +192,7 @@ function SeventyTwoSheet({ data, onClose }: { data: WeatherBundle; onClose: () =
         }}
       >
         <h3 className="selected-date-title">{selectedDate ? formatDate(selectedDate) : "--"}</h3>
-        <p className="swipe-date-hint">左右滑動切換日期</p>
+        <p className="swipe-date-hint">左右滑動切換日期 · 拖曳圖表查看每小時</p>
         <div className="segmented-control metric-tabs">
         <button type="button" className={metric === "temperature" ? "active" : ""} onClick={() => setMetric("temperature")}>實際氣溫</button>
         <button type="button" className={metric === "feels" ? "active" : ""} onClick={() => setMetric("feels")}>體感溫度</button>
@@ -205,39 +200,18 @@ function SeventyTwoSheet({ data, onClose }: { data: WeatherBundle; onClose: () =
         <button type="button" className={metric === "humidity" ? "active" : ""} onClick={() => setMetric("humidity")}>濕度</button>
         </div>
 
-        <div className="chart-summary">
+        <div className={`chart-summary ${metric === "wind" || metric === "humidity" ? "compact-metric" : ""}`}>
           <div>
-            <strong>{current ? series[0] : "--"}{metric === "wind" ? " 級" : metric === "humidity" ? "%" : "°"}</strong>
-            <span>最高 {series.length ? Math.max(...series) : "--"} · 最低 {series.length ? Math.min(...series) : "--"}</span>
+            <time>{current ? formatTaipeiTime(current.time) : "--"}</time>
+            <strong>{current ? reading(series[hourIndex]) ?? "--" : "--"}{metric === "wind" ? " 級" : metric === "humidity" ? "%" : "°"}</strong>
+            <span>最高 {validSeries.length ? Math.max(...validSeries) : "--"} · 最低 {validSeries.length ? Math.min(...validSeries) : "--"}</span>
           </div>
           <WeatherIcon description={current?.weatherDescription} precipitation={current?.precipitationProbability} size={50} />
         </div>
 
-        <div className="line-chart" aria-label="逐小時天氣曲線圖">
-          <svg viewBox="0 0 1000 250" preserveAspectRatio="none" role="img">
-            <defs>
-              <linearGradient id="temperature-fill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stopColor="#d9d9d9" stopOpacity=".75" />
-                <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
-              </linearGradient>
-            </defs>
-            <polyline className="chart-area-line" points={makePoints(series)} />
-            <polygon className="chart-area-fill" points={`0,235 ${makePoints(series)} 1000,235`} />
-          </svg>
-          <div className="chart-labels">
-            {visible.filter((_, index) => index % Math.max(1, Math.floor(visible.length / 4)) === 0).slice(0, 4).map((item) => (
-              <span key={item.time}>{formatTaipeiTime(item.time)}</span>
-            ))}
-          </div>
-        </div>
-
-        <div className="rain-title"><strong>降雨機率</strong><b>{rain[0] ?? 0}%</b></div>
-        <div className="line-chart rain-chart" aria-label="逐小時降雨機率曲線圖">
-          <svg viewBox="0 0 1000 250" preserveAspectRatio="none" role="img">
-            <polygon className="rain-fill" points={`0,235 ${makePoints(rain)} 1000,235`} />
-            <polyline className="rain-line" points={makePoints(rain)} />
-          </svg>
-        </div>
+        <ForecastChart values={series} times={chartTimes} selected={hourIndex} onSelect={setSelectedHour} label="逐小時天氣曲線圖" unit={metric === "wind" ? "" : metric === "humidity" ? "%" : "°"} fixedMax={metric === "wind" ? 12 : metric === "humidity" ? 100 : undefined} />
+        <div className="rain-title"><strong>降雨機率</strong><b>{reading(rain[hourIndex], true) ?? "--"}%</b></div>
+        <ForecastChart values={rain} times={chartTimes} selected={hourIndex} onSelect={setSelectedHour} label="逐小時降雨機率曲線圖" unit="%" rain />
 
         <div className="forecast-facts">
           <div><Wind /><span>風向</span><strong>{current?.windDirection ?? "--"}</strong></div>
@@ -250,8 +224,8 @@ function SeventyTwoSheet({ data, onClose }: { data: WeatherBundle; onClose: () =
 
 function pollutantValue(aqi: AQIObservation, key: "o3" | "pm25" | "pm10" | "co" | "so2" | "no2") {
   const item = aqi[key];
-  if (typeof item === "number") return item;
-  return item?.current ?? "--";
+  if (typeof item === "number") return reading(item, true) ?? "--";
+  return reading(item?.current, true) ?? "--";
 }
 
 function AqiSheet({ data, onClose }: { data: WeatherBundle; onClose: () => void }) {
@@ -305,11 +279,13 @@ function MenuSheet({
   onOpenRadar: () => void;
 }) {
   const items = [
+    { icon: ListOrdered, title: "自訂首頁排序", detail: "調整卡片順序與顯示項目", action: () => onNavigate("home-order") },
+    { icon: Palette, title: "外觀", detail: "淺色、深色或跟隨系統", action: () => onNavigate("appearance") },
     { icon: MapPin, title: "我目前的位置", detail: "新增、移除與調整地點順序", action: () => onNavigate("locations") },
-    { icon: Bell, title: "通知設定", detail: "每日天氣摘要與即時動態", action: () => onNavigate("notifications") },
+    { icon: Bell, title: "通知設定", detail: "每日天氣摘要與警特報", action: () => onNavigate("notifications") },
     { icon: CalendarDays, title: "7 日預報", detail: "每日與一週概況", action: () => onNavigate("seven-day") },
     { icon: LineChart, title: "72 小時預報", detail: "溫度、降雨與濕度曲線", action: () => onNavigate("seventy-two") },
-    { icon: Gauge, title: "空氣品質", detail: "污染物與全台測站", action: () => onNavigate("aqi") },
+    { icon: Gauge, title: "空氣品質", detail: "污染物與測站位置", action: () => onNavigate("aqi") },
     { icon: Droplets, title: "雨量觀測", detail: "今日逐時與近 30 日雨量", action: () => onNavigate("rainfall") },
     { icon: ThermometerSun, title: "溫度排行", detail: "今日高溫與即時體感排行", action: () => onNavigate("temperature-ranking") },
     { icon: Map, title: "即時圖資", detail: "雷達、降雨雷達與溫度分布", action: onOpenRadar },
@@ -325,7 +301,7 @@ function MenuSheet({
           </button>
         ))}
       </div>
-      <p className="source-note">資料即時取自 Taiwan Weather API，所有網路傳輸皆使用 HTTPS。</p>
+      <p className="source-note">資料由 Taiwan Weather 提供，來源為中央氣象署與環境部。</p>
     </FullSheet>
   );
 }
@@ -364,11 +340,11 @@ function RainfallSheet({
         : "--";
   const selectedValue =
     selected && "precipitation" in selected
-      ? selected.precipitation ?? 0
-      : 0;
+      ? reading(selected.precipitation, true)
+      : null;
 
   return (
-    <FullSheet title="雨量" onClose={onClose} className="rainfall-native-sheet">
+    <FullSheet title="降雨資料" onClose={onClose} className="rainfall-native-sheet" closePosition="right">
       <div className="rainfall-station">
         <span>觀測站</span>
         <strong>{station}</strong>
@@ -379,19 +355,19 @@ function RainfallSheet({
           className={mode === "hourly" ? "active" : ""}
           onClick={() => setMode("hourly")}
         >
-          今日逐時
+          今日降雨
         </button>
         <button
           type="button"
           className={mode === "daily" ? "active" : ""}
           onClick={() => setMode("daily")}
         >
-          近 30 日
+          過去 30 天降雨
         </button>
       </div>
       <div className="rainfall-selected">
         <span>{selectedLabel}</span>
-        <strong>{selectedValue}<small>mm</small></strong>
+        <strong>{selectedValue ?? "--"}<small>mm</small></strong>
       </div>
       <div className={`rainfall-bars ${mode}`}>
         {values.map((value, index) => (
@@ -400,7 +376,7 @@ function RainfallSheet({
             key={mode === "hourly" ? hourly[index]?.periodStart : daily[index]?.date}
             className={activeIndex === index ? "active" : ""}
             style={{ "--bar-height": `${Math.max(3, (value / maxValue) * 100)}%` } as React.CSSProperties}
-            aria-label={`${value} mm`}
+            aria-label={`${mode === "hourly" ? `${hourly[index]?.hour}時` : daily[index]?.date}：${reading(mode === "hourly" ? hourly[index]?.precipitation : daily[index]?.precipitation, true) ?? "無資料"} mm`}
             onClick={() => {
               if (mode === "hourly") setHourlyIndex(index);
               else setDailyIndex(index);
@@ -528,15 +504,15 @@ function TemperatureRankingSheet({
   );
 }
 
-export function DetailSheets({ active, data, onClose, onOpenRadar, onNavigate }: Props) {
+export function DetailSheets({ active, data, onClose, onOpenRadar, onNavigate, initialDate }: Props) {
   const content = useMemo(() => {
-    if (active === "seven-day") return <SevenDaySheet data={data} onClose={onClose} />;
+    if (active === "seven-day") return <SevenDaySheet data={data} onClose={onClose} initialDate={initialDate} />;
     if (active === "seventy-two") return <SeventyTwoSheet data={data} onClose={onClose} />;
     if (active === "aqi") return <AqiSheet data={data} onClose={onClose} />;
     if (active === "rainfall") return <RainfallSheet data={data} onClose={onClose} />;
     if (active === "temperature-ranking") return <TemperatureRankingSheet data={data} onClose={onClose} />;
     if (active === "menu") return <MenuSheet onClose={onClose} onNavigate={onNavigate} onOpenRadar={onOpenRadar} />;
     return null;
-  }, [active, data, onClose, onOpenRadar, onNavigate]);
+  }, [active, data, onClose, onOpenRadar, onNavigate, initialDate]);
   return content;
 }

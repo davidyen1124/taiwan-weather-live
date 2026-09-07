@@ -14,9 +14,11 @@ import {
   RefreshCw,
   ThermometerSun,
 } from "lucide-react";
-import type { RadarFrame, TemperatureImage } from "../lib/weather";
+import { RadarMap } from "./RadarMap";
+import type { Coordinates, RadarFrame, TemperatureImage } from "../lib/weather";
 import {
   fetchRadarFrames,
+  framesWithinHours,
   fetchTemperatureImage,
   formatTaipeiTime,
 } from "../lib/weather";
@@ -31,9 +33,10 @@ const RADAR_TYPES = {
   linyuan: "rainfall_radar_linyuan",
 } as const;
 
-type Props = { onNavigate: (view: RootView) => void };
+type Props = { coordinates: Coordinates; onNavigate: (view: RootView) => void };
 
-export function RadarView({ onNavigate }: Props) {
+export function RadarView({ onNavigate, coordinates }: Props) {
+  const [revision, setRevision] = useState(0);
   const [mode, setMode] = useState<Mode>("radar");
   const [rainfallType, setRainfallType] = useState<"shulin" | "nantun" | "linyuan">("shulin");
   const [duration, setDuration] = useState(1);
@@ -51,7 +54,7 @@ export function RadarView({ onNavigate }: Props) {
     [activeType, framesByType],
   );
   const frames = useMemo(
-    () => allFrames.slice(-Math.min(allFrames.length, duration * 6 + 1)),
+    () => framesWithinHours(allFrames, duration),
     [allFrames, duration],
   );
   const safeIndex = Math.min(selectedIndex, Math.max(0, frames.length - 1));
@@ -59,27 +62,19 @@ export function RadarView({ onNavigate }: Props) {
 
   useEffect(() => {
     const controller = new AbortController();
-    Promise.all([
-      fetchRadarFrames(RADAR_TYPES.radar, 73, controller.signal),
-      fetchRadarFrames(RADAR_TYPES.shulin, 73, controller.signal),
-      fetchRadarFrames(RADAR_TYPES.nantun, 73, controller.signal),
-      fetchRadarFrames(RADAR_TYPES.linyuan, 73, controller.signal),
-      fetchTemperatureImage(controller.signal),
-    ]).then(([radar, shulin, nantun, linyuan, image]) => {
-      setFramesByType({
-        [RADAR_TYPES.radar]: radar,
-        [RADAR_TYPES.shulin]: shulin,
-        [RADAR_TYPES.nantun]: nantun,
-        [RADAR_TYPES.linyuan]: linyuan,
-      });
-      setTemperatureImage(image);
-      setSelectedIndex(Math.max(0, Math.min(6, radar.length - 1)));
-      setError(null);
-    }).catch((nextError: unknown) => {
-      if ((nextError as Error)?.name !== "AbortError") setError("雷達資料暫時無法載入");
-    }).finally(() => setLoading(false));
+    setLoading(true); setError(null);
+    const work = mode === "temperature"
+      ? fetchTemperatureImage(controller.signal).then(image => setTemperatureImage(image))
+      : fetchRadarFrames(activeType, 73, controller.signal).then(nextFrames => {
+          if (controller.signal.aborted) return;
+          setFramesByType(previous => ({ ...previous, [activeType]: nextFrames }));
+          setSelectedIndex(10000);
+        });
+    work.catch(() => {
+      if (!controller.signal.aborted) setError("圖資暫時無法載入，請稍後重新整理。");
+    }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, []);
+  }, [activeType, mode, revision]);
 
   useEffect(() => {
     if (!playing || mode === "temperature" || frames.length < 2) return;
@@ -95,35 +90,29 @@ export function RadarView({ onNavigate }: Props) {
     setLayersOpen(false);
     const nextType = nextMode === "rainfall" ? RADAR_TYPES[rainfallType] : RADAR_TYPES.radar;
     const nextFrames = framesByType[nextType] ?? [];
-    setSelectedIndex(Math.max(0, Math.min(duration * 6, nextFrames.length - 1)));
+    setSelectedIndex(Math.max(0, framesWithinHours(nextFrames, duration).length - 1));
   }
 
   function chooseDuration(hours: number) {
     setDuration(hours);
     setPlaying(false);
-    setSelectedIndex(Math.min(hours * 6, Math.max(0, allFrames.length - 1)));
+    setSelectedIndex(Math.max(0, framesWithinHours(allFrames, hours).length - 1));
   }
 
   function chooseRainfallType(nextType: "shulin" | "nantun" | "linyuan") {
     setRainfallType(nextType);
     setPlaying(false);
-    setSelectedIndex(Math.min(duration * 6, Math.max(0, (framesByType[RADAR_TYPES[nextType]] ?? []).length - 1)));
+    setSelectedIndex(10000);
   }
 
   return (
     <main className="radar-screen">
-      <div className="map-canvas">
-        <iframe
-          title="台灣地圖"
-          src="https://www.openstreetmap.org/export/embed.html?bbox=119.4%2C21.4%2C122.8%2C25.7&layer=mapnik"
-          loading="eager"
-        />
-        {mode === "temperature" && temperatureImage ? (
-          <img className="temperature-layer" src={temperatureImage.r2Url ?? temperatureImage.url ?? ""} alt="全台即時溫度分布圖" />
-        ) : currentFrame ? (
-          <img className="radar-layer" src={currentFrame.url} alt={`${formatTaipeiTime(currentFrame.dateTime)} 雷達影像`} />
+      <div className={`map-canvas map-mode-${mode}`}>
+        {mode === "radar" ? <RadarMap imageUrl={currentFrame?.r2Url || currentFrame?.url} coordinates={coordinates} /> : mode === "temperature" && temperatureImage ? (
+          <img className="standalone-weather-image" src={temperatureImage.r2Url || temperatureImage.url || ""} alt="全台即時溫度分布圖" />
+        ) : mode === "rainfall" && currentFrame ? (
+          <img className="standalone-weather-image" src={currentFrame.r2Url || currentFrame.url} alt={`${formatTaipeiTime(currentFrame.dateTime)} 降雨雷達影像`} />
         ) : null}
-        <div className="map-vignette" />
       </div>
 
       <div className="map-brand">
@@ -150,6 +139,7 @@ export function RadarView({ onNavigate }: Props) {
       ) : null}
 
       <section className="radar-controls">
+        <button type="button" className="radar-refresh" aria-label="重新整理圖資" disabled={loading} onClick={() => { setPlaying(false); setRevision(r => r + 1); }}><RefreshCw size={16} className={loading ? "spin" : ""} /></button>
         <h1>{mode === "radar" ? "雷達回波" : mode === "rainfall" ? "降雨雷達" : "溫度分布"}</h1>
         {mode === "rainfall" ? (
           <div className="segmented-control rainfall-stations">
@@ -169,7 +159,7 @@ export function RadarView({ onNavigate }: Props) {
             {loading ? (
               <div className="radar-loading"><RefreshCw className="spin" /> 載入雷達資料中…</div>
             ) : error ? (
-              <div className="radar-loading">{error}</div>
+              <div className="radar-loading">{error}<button type="button" onClick={() => setRevision(r => r + 1)}>重新整理</button></div>
             ) : (
               <>
                 <div className="radar-time-row"><span>{frames[0] ? formatTaipeiTime(frames[0].dateTime) : "--"}</span><strong>{currentFrame ? formatTaipeiTime(currentFrame.dateTime) : "--"}</strong><span>{frames.at(-1) ? formatTaipeiTime(frames.at(-1)?.dateTime) : "--"}</span></div>
@@ -185,14 +175,14 @@ export function RadarView({ onNavigate }: Props) {
                   <button type="button" className="play-button" onClick={() => setPlaying((value) => !value)} disabled={frames.length < 2} aria-label={playing ? "暫停" : "播放"}>
                     {playing ? <Pause fill="currentColor" /> : <Play fill="currentColor" />}
                   </button>
-                  <div><span>{playing ? "播放中" : "已暫停"} · 過去 {duration} 小時</span><small>第 {frames.length ? safeIndex + 1 : 0} / {frames.length} 張 · 每 10 分鐘</small></div>
+                  <div><span>{playing ? "播放中" : "已暫停"} · 過去 {duration} 小時</span><small>第 {frames.length ? safeIndex + 1 : 0} / {frames.length} 張 · 依觀測時間</small></div>
                   <button type="button" className="jump-button" onClick={() => { setSelectedIndex(Math.max(0, frames.length - 1)); setPlaying(false); }}>跳到現在</button>
                 </div>
               </>
             )}
           </>
         ) : (
-          <div className="temperature-panel-copy">
+          <div className="temperature-panel-copy">{error ? <span role="status">{error}</span> : null}
             <strong>{temperatureImage ? formatTaipeiTime(temperatureImage.dateTime, true) : "--"}</strong>
             <span>顏色越偏紅代表溫度越高，綠色區域相對涼爽。</span>
           </div>
