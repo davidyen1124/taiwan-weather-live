@@ -178,6 +178,12 @@ export async function fetchRadarFrames(type: string, limit: number, signal?: Abo
 export const fetchAdvisories = (signal?: AbortSignal) =>
   getJson<{ data: { advisories: WeatherAdvisory[] } }>("/weather/advisories", signal).then((r) => r.data.advisories);
 
+/** Hourly entries from the current hour onward (the API list can start a few hours back). */
+export function upcomingHours(hourly: HourlyForecast[], now = Date.now()) {
+  const index = hourly.findIndex((h) => new Date(h.time).getTime() + 3600000 > now);
+  return index <= 0 ? hourly : hourly.slice(index);
+}
+
 /** CWA uses -99 style sentinels for missing observations. */
 export function reading(value: number | null | undefined, nonnegative = false): number | null {
   return typeof value === "number" && Number.isFinite(value) && value > -90 && (!nonnegative || value >= 0) ? value : null;

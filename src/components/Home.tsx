@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { reading, type WeatherBundle } from "../lib/api";
+import { reading, upcomingHours, type WeatherBundle } from "../lib/api";
 import { artUrl, glyphIcon, heroAnimation, isNightHour, periodIcon, suggestionIcon } from "../lib/assets";
 import { aqiColor, aqiInfo, aqiLevel, temperatureColor, uvColor, uvLabel, type Scheme } from "../lib/colors";
 import { dateKey, hhmm, hourLabel, minutesOfDay, monthDay, taipei, weekdayName, windDirectionText } from "../lib/format";
@@ -119,7 +119,7 @@ function MenuButton({ onClick }: { onClick: () => void }) {
 
 function Hero({ data, location, onMenu }: { data: WeatherBundle; location: SavedLocation; onMenu: () => void }) {
   const { forecast, observation } = data;
-  const now = forecast.hourly[0];
+  const now = upcomingHours(forecast.hourly)[0];
   const today = forecast.daily[0];
   const temperature = reading(observation?.temperature) ?? now?.temperature ?? null;
   const humidity = reading(observation?.humidity, true) ?? now?.humidity ?? null;
@@ -171,7 +171,7 @@ function Tile({ label, children, unit }: { label: string; children: ReactNode; u
 }
 
 function MetricTiles({ data, scheme }: { data: WeatherBundle; scheme: Scheme }) {
-  const now = data.forecast.hourly[0];
+  const now = upcomingHours(data.forecast.hourly)[0];
   const uv = reading(data.observation?.uvIndex?.value, true);
   const feels = now?.feelsLike ?? null;
   return (
@@ -224,7 +224,7 @@ function SectionHeader({ title, onDetail }: { title: string; onDetail?: () => vo
 }
 
 function HourlyCard({ data, onDetail }: { data: WeatherBundle; onDetail: () => void }) {
-  const hours = data.forecast.hourly.slice(0, 24);
+  const hours = upcomingHours(data.forecast.hourly).slice(0, 24);
   return (
     <section className="home-section">
       <SectionHeader title="逐小時預報" onDetail={onDetail} />

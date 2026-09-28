@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { DailyForecast, HourlyForecast, WeatherBundle } from "../lib/api";
+import { upcomingHours, type DailyForecast, type HourlyForecast, type WeatherBundle } from "../lib/api";
 import { isNightHour, periodIcon } from "../lib/assets";
 import { palette, uvColor, uvLabel, type Scheme } from "../lib/colors";
 import { dateKey, fromDateKey, fullDate, taipei, WEEKDAY_SHORT } from "../lib/format";
@@ -180,7 +180,7 @@ type Metric = "temperature" | "feelsLike" | "wind" | "humidity";
 
 export function HourlySheet({ open, onClose, data }: { open: boolean; onClose: () => void; data: WeatherBundle | undefined }) {
   const { scheme } = useStore();
-  const hours = data?.forecast.hourly ?? [];
+  const hours = useMemo(() => (data ? upcomingHours(data.forecast.hourly) : []), [data]);
   const days = useMemo(() => [...new Set(hours.map((h) => dateKey(h.time)))], [hours]);
   const [day, setDay] = useState(days[0] ?? "");
   const [metric, setMetric] = useState<Metric>("temperature");
