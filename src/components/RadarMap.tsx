@@ -119,7 +119,6 @@ export function RadarMap({ imageUrl, scheme }: { imageUrl?: string; scheme: Sche
   return (
     <div className="radar-map" ref={holder}>
       <img ref={overlay} className="radar-overlay" src={imageUrl} alt="" hidden={!imageUrl || !ready} />
-      <a className="map-credit" href="https://openfreemap.org" target="_blank" rel="noreferrer">OpenFreeMap <span>© OpenMapTiles © OpenStreetMap</span></a>
     </div>
   );
 }

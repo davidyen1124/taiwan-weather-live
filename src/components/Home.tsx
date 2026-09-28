@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { reading, upcomingHours, upcomingPeriods, type WeatherBundle } from "../lib/api";
 import { glyphIcon, heroArt, isNightHour, periodIcon, suggestionIcon, weatherKind } from "../lib/assets";
 import { aqiColor, aqiInfo, aqiLevel, temperatureColor, uvColor, uvLabel, type Scheme } from "../lib/colors";
@@ -16,37 +16,44 @@ export type HomeActions = {
   openAddLocation: () => void;
 };
 
-const HERO = 357;
+/** Collapsed hero height (menu, title and temperature stay visible). Must match --hero-collapsed. */
 const HERO_COLLAPSED = 242;
 
 export function HomeScreen(actions: HomeActions) {
   const { locations, page, setPage } = useStore();
   const pagerRef = useRef<HTMLDivElement>(null);
-  const scrolling = useRef(false);
+  const fromSwipe = useRef(false);
+  // Page chosen by the app (drawer, page dots, 定位目前位置). Scroll snapping re-snaps to the old card
+  // when pages are inserted, so hold this position until the user touches or scrolls the pager.
+  const pinned = useRef<number | null>(null);
 
-  // Only jump the pager when the page changes from elsewhere (drawer, page dots, locate).
-  // Page changes that come from the user's own swipe must not fight the scroll.
-  useEffect(() => {
+  useLayoutEffect(() => {
     const pager = pagerRef.current;
     if (!pager) return;
-    if (scrolling.current) { scrolling.current = false; return; }
-    const target = page * pager.clientWidth;
-    if (Math.abs(pager.scrollLeft - target) > 2) pager.scrollTo({ left: target, behavior: "instant" as ScrollBehavior });
+    if (fromSwipe.current) { fromSwipe.current = false; return; }
+    pinned.current = page;
+    pager.scrollTo({ left: page * pager.clientWidth, behavior: "instant" as ScrollBehavior });
   }, [page, locations.length]);
 
   const onScroll = () => {
     const pager = pagerRef.current;
     if (!pager) return;
+    if (pinned.current !== null) {
+      const target = pinned.current * pager.clientWidth;
+      if (Math.abs(pager.scrollLeft - target) > 2) pager.scrollLeft = target;
+      return;
+    }
     const index = Math.round(pager.scrollLeft / pager.clientWidth);
     if (index !== page) {
-      scrolling.current = true;
+      fromSwipe.current = true;
       setPage(index);
     }
   };
+  const release = () => { pinned.current = null; };
 
   return (
     <main className="home">
-      <div className="pager" ref={pagerRef} onScroll={onScroll}>
+      <div className="pager" ref={pagerRef} onScroll={onScroll} onPointerDown={release} onTouchStart={release} onWheel={release} onKeyDown={release}>
         {locations.map((location, index) => (
           <ErrorBoundary key={location.id} className="location-page"><LocationPage location={location} active={index === page} actions={actions} /></ErrorBoundary>
         ))}
@@ -70,6 +77,7 @@ function LocationPage({ location, active, actions }: { location: SavedLocation; 
   const entry = weather[weatherKey(location)];
   const scrollRef = useRef<HTMLDivElement>(null);
   const pageRef = useRef<HTMLElement>(null);
+  const spacerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (active) ensureWeather(location);
@@ -85,7 +93,8 @@ function LocationPage({ location, active, actions }: { location: SavedLocation; 
   const onScroll = () => {
     const el = scrollRef.current;
     if (!el || !pageRef.current) return;
-    const p = Math.min(1, Math.max(0, el.scrollTop / (HERO - HERO_COLLAPSED)));
+    const full = spacerRef.current?.offsetHeight ?? HERO_COLLAPSED;
+    const p = Math.min(1, Math.max(0, el.scrollTop / Math.max(1, full - HERO_COLLAPSED)));
     pageRef.current.style.setProperty("--p", String(p));
     pageRef.current.classList.toggle("collapsed", p >= 1);
   };
@@ -98,7 +107,7 @@ function LocationPage({ location, active, actions }: { location: SavedLocation; 
         <>
           <Hero data={data} location={location} onMenu={actions.openDrawer} />
           <div className="page-scroll" ref={scrollRef} onScroll={onScroll}>
-            <div className="hero-spacer" />
+            <div className="hero-spacer" ref={spacerRef} />
             <p className="source-line">資料來源時間：{hhmm(data.observation?.observedAt ?? data.forecast.hourly[0]?.time)} ・上次更新：{hhmm(data.fetchedAt)}</p>
             {prefs.order.filter((id) => !prefs.hidden.includes(id)).map((id) => (
               <Section key={id} id={id} data={data} scheme={scheme} actions={actions} />
@@ -139,6 +148,7 @@ function Hero({ data, location, onMenu }: { data: WeatherBundle; location: Saved
     <header className={`hero ${night || kind === "thunder" ? "hero-night" : "hero-day"}`}>
       <img className="hero-art" src={heroArt(kind, night)} alt="" aria-hidden />
       <div className="hero-scrim" aria-hidden />
+      <div className="hero-content">
       <MenuButton onClick={onMenu} />
       <h1 className="hero-title">
         {title}
@@ -147,6 +157,7 @@ function Hero({ data, location, onMenu }: { data: WeatherBundle; location: Saved
       <p className="hero-temp">{temperature === null ? "--" : Math.round(temperature)}°</p>
       <p className="hero-range">最高 {today ? Math.round(today.maxTemperature) : "--"}° • 最低 {today ? Math.round(today.minTemperature) : "--"}°</p>
       <p className="hero-wind">{direction !== null ? windDirectionText(direction) : now?.windDirection ?? "--"} • 濕度 {humidity === null ? "--" : Math.round(humidity)}%</p>
+      </div>
     </header>
   );
 }
@@ -358,10 +369,8 @@ function SunCard({ data }: { data: WeatherBundle }) {
   const g = useMemo(() => sunGeometry(minutesOfDay(rise), minutesOfDay(set), nowMinutes), [rise, set, nowMinutes]);
   return (
     <div className="card sun-card">
-      <Symbol name="sunrise" size={20} strokeWidth={1.5} className="sun-icon rise" />
-      <Symbol name="sunset" size={20} strokeWidth={1.5} className="sun-icon set" />
-      <strong className="sun-time rise">{rise}</strong>
-      <strong className="sun-time set">{set}</strong>
+      <div className="sun-side"><Symbol name="sunrise" size={20} strokeWidth={1.5} /><strong className="sun-time">{rise}</strong></div>
+      <div className="sun-side end"><Symbol name="sunset" size={20} strokeWidth={1.5} /><strong className="sun-time">{set}</strong></div>
       <svg className="sun-curve" viewBox="0 0 350.8 151.5" aria-hidden>
         <defs>
           <linearGradient id="sun-stroke" gradientUnits="userSpaceOnUse" x1="67.5" x2="282.5" y1="0" y2="0">

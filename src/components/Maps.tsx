@@ -117,6 +117,11 @@ function usePlayback({ title, frames, stationPicker }: { title: string; frames: 
   ) };
 }
 
+/** Sits just above the panel, so it follows whatever height the panel ends up. */
+function MapCredit() {
+  return <a className="map-credit" href="https://openfreemap.org" target="_blank" rel="noreferrer">OpenFreeMap <span>© OpenMapTiles © OpenStreetMap</span></a>;
+}
+
 function PanelShell({ children, tone }: { children: React.ReactNode; tone: "sky" | "plain" }) {
   return <div className={`maps-panel ${tone}`}>{children}</div>;
 }
@@ -141,7 +146,7 @@ function RadarLayer() {
   return (
     <>
       <RadarMap imageUrl={url} scheme={scheme} />
-      {error ? <LoadingPanel tone="sky" text="雷達影像載入失敗" /> : !frames ? <LoadingPanel tone="sky" text="載入雷達資料中..." /> : frames.length === 0 ? <LoadingPanel tone="sky" text="目前沒有雷達影像" /> : <PanelShell tone="sky">{playback.panel}</PanelShell>}
+      {error ? <LoadingPanel tone="sky" text="雷達影像載入失敗" /> : !frames ? <LoadingPanel tone="sky" text="載入雷達資料中..." /> : frames.length === 0 ? <LoadingPanel tone="sky" text="目前沒有雷達影像" /> : <PanelShell tone="sky"><MapCredit />{playback.panel}</PanelShell>}
     </>
   );
 }
