@@ -482,8 +482,8 @@ p, h1, h2, h3 { margin: 0; font-weight: inherit; }
 
 /* ---------- Maps ---------- */
 .maps { position: absolute; inset: 0; background: var(--gray100); overflow: hidden; }
-.maps .radar-map { position: absolute; z-index: 0; inset: 0; background: #bfe4fa; }
-:root[data-theme="dark"] .radar-map { background: #142350; }
+.maps .radar-map { position: absolute; z-index: 0; inset: 0; background: #c8d9e5; }
+:root[data-theme="dark"] .radar-map { background: #121419; }
 .map-credit { position: absolute; z-index: 2; left: 10px; bottom: 323px; font-size: 11px; font-weight: 600; color: rgba(0, 0, 0, 0.55); text-shadow: 0 0 3px rgba(255, 255, 255, 0.9); }
 .map-credit span { font-weight: 500; font-size: 9px; text-decoration: underline; margin-left: 6px; }
 :root[data-theme="dark"] .map-credit { color: rgba(255, 255, 255, 0.75); text-shadow: 0 0 3px rgba(0, 0, 0, 0.8); }
@@ -500,7 +500,7 @@ p, h1, h2, h3 { margin: 0; font-weight: inherit; }
   border-radius: 26px 26px 0 0; padding: 17.2px 0 0;
 }
 .maps-panel.sky { background: linear-gradient(180deg, rgba(222, 243, 253, 0.94), rgba(190, 233, 251, 0.97)); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
-:root[data-theme="dark"] .maps-panel.sky { background: linear-gradient(180deg, rgba(30, 44, 92, 0.94), rgba(16, 24, 56, 0.97)); }
+:root[data-theme="dark"] .maps-panel.sky { background: linear-gradient(180deg, rgba(40, 42, 47, 0.94), rgba(24, 25, 29, 0.97)); }
 .maps-panel.plain { background: rgba(254, 254, 255, 0.97); box-shadow: 0 -2px 14px rgba(0, 0, 0, 0.06); }
 :root[data-theme="dark"] .maps-panel.plain { background: rgba(49, 49, 49, 0.98); }
 .maps-rain .maps-panel { height: 361.4px; padding-top: 19px; }

@@ -101,7 +101,7 @@ Then open http://localhost:5173/taiwan-weather-live/. `npm run build` produces a
 
 - Weather data: the `api.taiwanweather.app` API used by the original app, which aggregates
   中央氣象署 (CWA) and 環境部 open data.
-- Map tiles: [OpenFreeMap](https://openfreemap.org) / © OpenMapTiles © OpenStreetMap contributors.
+- Map: [OpenFreeMap](https://openfreemap.org) Positron / Dark (the same basemaps as our mrt-app), tuned for the radar overlay — © OpenMapTiles © OpenStreetMap contributors.
 - The monochrome glyphs and the location-permission illustration come from the original
   天氣預報 app by Shuttle Network Limited; the hero art, colour weather icons, app icon and
   social preview are generated for this project. This is an unofficial fan rebuild and is not
