@@ -5,7 +5,7 @@ import { Alert, Sheet, Symbol, type SymbolName } from "./ui";
 const THEME_LABEL: Record<Theme, string> = { system: "隨系統設定", light: "亮色", dark: "暗色" };
 const FEEDBACK = `mailto:support@taiwanweather.app?subject=${encodeURIComponent("天氣預報 app 建議/回報")}`;
 const TERMS = "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/";
-const PRIVACY = "https://taiwanweather.app/privacy";
+const PRIVACY = "https://api.taiwanweather.app/privacy_policy.html";
 
 function Row({ icon, title, subtitle, onClick, href, chevron = true }: { icon: SymbolName; title: string; subtitle?: string; onClick?: () => void; href?: string; chevron?: boolean }) {
   const content = (

@@ -349,40 +349,41 @@ function SunCard({ data }: { data: WeatherBundle }) {
   const rise = sun?.riseTime ?? "05:45";
   const set = sun?.setTime ?? "17:45";
   const nowMinutes = (() => { const p = taipei(); return p.hour * 60 + p.minute; })();
-  const geometry = useMemo(() => sunGeometry(minutesOfDay(rise), minutesOfDay(set), nowMinutes), [rise, set, nowMinutes]);
+  const g = useMemo(() => sunGeometry(minutesOfDay(rise), minutesOfDay(set), nowMinutes), [rise, set, nowMinutes]);
   return (
     <div className="card sun-card">
-      <div className="sun-times">
-        <div><Symbol name="sunrise" size={20} strokeWidth={1.5} /><strong>{rise}</strong></div>
-        <div className="end"><Symbol name="sunset" size={20} strokeWidth={1.5} /><strong>{set}</strong></div>
-      </div>
-      <svg className="sun-curve" viewBox="0 0 312 80" preserveAspectRatio="none" aria-hidden>
+      <Symbol name="sunrise" size={20} strokeWidth={1.5} className="sun-icon rise" />
+      <Symbol name="sunset" size={20} strokeWidth={1.5} className="sun-icon set" />
+      <strong className="sun-time rise">{rise}</strong>
+      <strong className="sun-time set">{set}</strong>
+      <svg className="sun-curve" viewBox="0 0 350.8 151.5" aria-hidden>
         <defs>
-          <linearGradient id="sun-stroke" x1="0" x2="1" y1="0" y2="0">
+          <linearGradient id="sun-stroke" gradientUnits="userSpaceOnUse" x1="67.5" x2="282.5" y1="0" y2="0">
             <stop offset="0" stopColor="currentColor" stopOpacity="0" />
-            <stop offset="0.3" stopColor="currentColor" stopOpacity="1" />
-            <stop offset="0.7" stopColor="currentColor" stopOpacity="1" />
+            <stop offset="0.36" stopColor="currentColor" stopOpacity="1" />
+            <stop offset="0.64" stopColor="currentColor" stopOpacity="1" />
             <stop offset="1" stopColor="currentColor" stopOpacity="0" />
           </linearGradient>
         </defs>
-        <line x1="0" x2="312" y1={geometry.horizon} y2={geometry.horizon} className="sun-horizon" />
-        <path d={geometry.path} stroke="url(#sun-stroke)" strokeWidth="2.2" fill="none" />
-        {geometry.dot ? <circle cx={geometry.dot[0]} cy={geometry.dot[1]} r="6.5" className="sun-dot" /> : null}
+        <line x1="29.3" x2="321.5" y1="113.9" y2="113.9" className="sun-horizon" />
+        <path d={g.path} stroke="url(#sun-stroke)" strokeWidth="2.2" fill="none" />
+        {g.dot ? <circle cx={g.dot[0]} cy={g.dot[1]} r="6" className="sun-dot" /> : null}
       </svg>
     </div>
   );
 }
 
+/** Gaussian arc measured from the app: crosses the horizon (y 113.9) at sunrise/sunset, peaks at y 81.2. */
 function sunGeometry(rise: number, set: number, now: number) {
-  const width = 312, horizon = 44, peak = 8, bottom = 72;
-  const noon = (rise + set) / 2;
-  const sigma = (set - rise) / 4.6;
-  const toX = (m: number) => ((m - (noon - 720)) / 1440) * width;
-  const toY = (m: number) => bottom - (bottom - peak) * Math.exp(-((m - noon) ** 2) / (2 * sigma ** 2));
+  const center = 175.4, sigma = 49, base = 136, amplitude = 54.8;
+  const crossing = sigma * Math.sqrt(2 * Math.log(amplitude / (base - 113.9)));
+  const yAt = (x: number) => base - amplitude * Math.exp(-((x - center) ** 2) / (2 * sigma ** 2));
   const points: string[] = [];
-  for (let m = noon - 600; m <= noon + 600; m += 10) points.push(`${toX(m).toFixed(1)},${toY(m).toFixed(1)}`);
-  const dot = now >= rise - 40 && now <= set + 40 ? [toX(now), toY(now)] as const : null;
-  return { path: `M${points.join(" L")}`, horizon, dot };
+  for (let x = 60; x <= 291; x += 3) points.push(`${x.toFixed(1)},${yAt(x).toFixed(2)}`);
+  const perMinute = (2 * crossing) / Math.max(1, set - rise);
+  const x = center - crossing + (now - rise) * perMinute;
+  const dot = x >= 60 && x <= 291 ? [x, yAt(x)] as const : null;
+  return { path: `M${points.join(" L")}`, dot };
 }
 
 function HeroShell({ onMenu, children }: { onMenu: () => void; children: ReactNode }) {
