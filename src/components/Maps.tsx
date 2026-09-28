@@ -48,7 +48,7 @@ function useFrames(type: string) {
   useEffect(() => {
     const controller = new AbortController();
     setFrames(null); setError(false); setProgress(null);
-    fetchRadarFrames(type, type === RADAR_TYPE ? 73 : 289, controller.signal)
+    fetchRadarFrames(type, type === RADAR_TYPE ? 73 : 100, controller.signal)
       .then(async (list) => {
         if (type !== RADAR_TYPE) {
           // Station rasters are full images: preload the last hour like the app's "下載雷達影像中... n/25".

@@ -17,8 +17,11 @@ function humidityOf(description: string) {
 function DayStrip({ days, selected, onSelect }: { days: string[]; selected: string; onSelect: (day: string) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const el = ref.current?.querySelector<HTMLElement>(".day-chip.selected");
-    el?.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+    const strip = ref.current;
+    const el = strip?.querySelector<HTMLElement>(".day-chip.selected");
+    if (!strip || !el) return;
+    const target = el.offsetLeft + el.offsetWidth / 2 - strip.clientWidth / 2;
+    strip.scrollTo({ left: Math.max(0, target), behavior: "smooth" });
   }, [selected]);
   return (
     <div className="day-strip" ref={ref}>
@@ -101,7 +104,7 @@ function DailyDetail({ data, day }: { data: WeatherBundle; day: DailyForecast })
               <p className="period-meta">蒲福風級 {segment.beaufortScale || "--"}</p>
             </div>
             <div className="period-weather">
-              <img src={periodIcon(segment.weatherCode, segment.period === "nighttime", segment.weatherDescription)} alt="" />
+              <img src={periodIcon(segment.weatherCode, false, segment.weatherDescription)} alt="" />
               <span>{segment.weatherDescription}</span>
             </div>
           </div>
@@ -111,16 +114,19 @@ function DailyDetail({ data, day }: { data: WeatherBundle; day: DailyForecast })
   );
 }
 
+const WEEK_COLORS = { max: "#E89553", min: "#60A1F1", fill: { light: "#FDF6EE", dark: "#1B140E" } };
+
 function WeekChart({ days, selected, onSelect, scheme }: { days: DailyForecast[]; selected: string; onSelect: (d: string) => void; scheme: Scheme }) {
-  const W = 361, H = 214, plotL = 20, plotR = 322, top = 40, bottom = 186;
-  const ticks = niceTicks(Math.min(...days.map((d) => d.minTemperature)), Math.max(...days.map((d) => d.maxTemperature)), 3);
-  const lo = ticks[0], hi = ticks[ticks.length - 1];
+  // Geometry measured from the app (pt, relative to the chart's 359pt-wide box).
+  const W = 359, plotL = 11.7, plotR = 329, top = 26.5, bottom = 164.3;
+  const lo = Math.floor((Math.min(...days.map((d) => d.minTemperature)) - 2) / 2) * 2;
+  const hi = Math.ceil((Math.max(...days.map((d) => d.maxTemperature)) + 2) / 2) * 2;
+  const ticks = [hi, (lo + hi) / 2, lo];
   const x = (i: number) => plotL + (i * (plotR - plotL)) / Math.max(1, days.length - 1);
   const y = (t: number) => bottom - ((t - lo) / (hi - lo)) * (bottom - top);
   const maxPts = days.map((d, i) => [x(i), y(d.maxTemperature)] as [number, number]);
   const minPts = days.map((d, i) => [x(i), y(d.minTemperature)] as [number, number]);
   const index = Math.max(0, days.findIndex((d) => d.date === selected));
-  const orange = dyn(palette.orange400, scheme), blue = dyn(palette.blue400, scheme);
   const fill = `${smoothPath(maxPts)} L${smoothPath([...minPts].reverse()).slice(1)} Z`;
   const svgRef = useRef<SVGSVGElement>(null);
 
@@ -135,35 +141,33 @@ function WeekChart({ days, selected, onSelect, scheme }: { days: DailyForecast[]
     <div className="week-chart">
       <div className="week-chart-head">
         <strong>本週氣溫</strong>
-        <span className="legend"><i style={{ background: orange }} />最高溫<i style={{ background: blue }} />最低溫</span>
+        <span className="legend"><i style={{ background: WEEK_COLORS.max }} />最高溫<i style={{ background: WEEK_COLORS.min }} />最低溫</span>
       </div>
-      <svg ref={svgRef} viewBox={`0 0 ${W} ${H + 44}`} className="week-chart-svg"
+      <svg ref={svgRef} viewBox={`0 0 ${W} 205`} className="week-chart-svg"
         onPointerDown={(e) => { (e.target as Element).setPointerCapture?.(e.pointerId); pick(e.clientX); }}
         onPointerMove={(e) => { if (e.buttons) pick(e.clientX); }}>
         {ticks.map((t) => (
           <g key={t}>
-            <line x1={0} x2={plotR + 4} y1={y(t)} y2={y(t)} className="grid-line" />
-            <text x={W} y={y(t) + 5} textAnchor="end" className="axis-label">{t}°</text>
+            <line x1={plotL} x2={plotR} y1={y(t)} y2={y(t)} className="grid-line" />
+            <text x={W} y={y(t) + 4.5} textAnchor="end" className="axis-label">{t}°</text>
           </g>
         ))}
-        <path d={fill} fill={dyn(palette.orange400, scheme)} fillOpacity={scheme === "dark" ? 0.12 : 0.08} />
-        <path d={smoothPath(maxPts)} stroke={orange} strokeWidth={2.6} fill="none" />
-        <path d={smoothPath(minPts)} stroke={blue} strokeWidth={2.6} fill="none" />
-        {[[maxPts[index], orange, days[index].maxTemperature], [minPts[index], blue, days[index].minTemperature]].map(([p, color, value], k) => {
-          const [px, py] = p as [number, number];
-          return (
-            <g key={k}>
-              <circle cx={px} cy={py} r={11} fill={color as string} fillOpacity={0.22} />
-              <circle cx={px} cy={py} r={5.5} fill={color as string} />
-              <text x={Math.max(px, 18)} y={py - 17} textAnchor="middle" className="point-label" fill={color as string}>{Math.round(value as number)}°</text>
-            </g>
-          );
-        })}
+        <path d={fill} fill={WEEK_COLORS.fill[scheme]} />
+        <path d={smoothPath(maxPts)} stroke={WEEK_COLORS.max} strokeWidth={2.4} fill="none" />
+        <path d={smoothPath(minPts)} stroke={WEEK_COLORS.min} strokeWidth={2.4} fill="none" />
+        {([[maxPts[index], WEEK_COLORS.max, days[index].maxTemperature], [minPts[index], WEEK_COLORS.min, days[index].minTemperature]] as const).map(([p, color, value], k) => (
+          <g key={k}>
+            <circle cx={p[0]} cy={p[1]} r={11.5} fill={color} fillOpacity={0.2} />
+            <circle cx={p[0]} cy={p[1]} r={4.2} fill={color} />
+            <text x={Math.max(p[0], 16)} y={p[1] - (k === 0 ? 19 : 12.7)} textAnchor="middle" className="point-label" fill={color}>{Math.round(value)}°</text>
+          </g>
+        ))}
         {days.map((d, i) => {
           const p = taipei(fromDateKey(d.date));
+          const cx = i === 0 ? Math.max(x(i), 12) : x(i);
           return (
-            <text key={d.date} x={Math.max(x(i), 12)} y={H + 12} textAnchor="middle" className={`x-label ${i === index ? "selected" : ""}`}>
-              {i === 0 ? <tspan x={Math.max(x(i), 16)}>今天</tspan> : <><tspan x={x(i)}>{p.month}/{p.day}</tspan><tspan x={x(i)} dy={18}>({WEEKDAY_SHORT[p.weekday]})</tspan></>}
+            <text key={d.date} x={cx} y={188.6} textAnchor="middle" className={`x-label ${i === index ? "selected" : ""}`}>
+              {i === 0 ? "今天" : <><tspan x={cx}>{p.month}/{p.day}</tspan><tspan x={cx} dy={13.7}>({WEEKDAY_SHORT[p.weekday]})</tspan></>}
             </text>
           );
         })}
@@ -223,8 +227,8 @@ export function HourlySheet({ open, onClose, data }: { open: boolean; onClose: (
           </div>
           <LineChart hours={window} values={window.map((h) => h.precipitationProbability ?? 0)} metric="rain" scheme={scheme} startsNow={day === days[0]} />
           <div className="hourly-facts">
-            <div><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M3 9h11a2.5 2.5 0 10-2.5-2.5M3 13h15a2.5 2.5 0 11-2.5 2.5M3 17h8" /></svg><span><small>風向</small><strong>{first.windDirection}</strong></span></div>
-            <div><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0112 7.2a4.3 4.3 0 017.5 2.6C19.5 15.4 12 20 12 20z" /></svg><span><small>舒適度</small><strong>{first.comfortDescription}</strong></span></div>
+            <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M3 9h11a2.5 2.5 0 10-2.5-2.5M3 13h15a2.5 2.5 0 11-2.5 2.5M3 17h8" /></svg><span><small>風向</small><strong>{first.windDirection}</strong></span></div>
+            <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0112 7.2a4.3 4.3 0 017.5 2.6C19.5 15.4 12 20 12 20z" /></svg><span><small>舒適度</small><strong>{first.comfortDescription}</strong></span></div>
           </div>
         </div>
       ) : null}
@@ -242,7 +246,8 @@ function valueOf(h: HourlyForecast, metric: Metric) {
 }
 
 function LineChart({ hours, values, metric, scheme, startsNow }: { hours: HourlyForecast[]; values: number[]; metric: Metric | "rain"; scheme: Scheme; startsNow: boolean }) {
-  const W = 361, plotL = 0, plotR = 314, top = 8, bottom = metric === "rain" ? 181 : 142;
+  // Measured from the app: plot 0→313.8pt, labels left-aligned at 322pt, temp plot 133.7pt / rain plot 116pt tall.
+  const W = 355, plotL = 0, plotR = 313.8, top = 8, bottom = metric === "rain" ? 124 : 141.7;
   let ticks: number[];
   if (metric === "rain" || metric === "humidity") ticks = [0, 20, 40, 60, 80, 100];
   else if (metric === "wind") ticks = [0, 3, 6, 9, 12];
@@ -266,27 +271,27 @@ function LineChart({ hours, values, metric, scheme, startsNow }: { hours: Hourly
   const labels = hours.map((h, i) => ({ i, p: taipei(h.time) })).filter(({ i, p }) => i === 0 || (i % 6 === 0) || (p.hour === 0 && startsNow));
 
   return (
-    <svg viewBox={`0 0 ${W} ${bottom + 34}`} className={`line-chart ${rain ? "rain" : ""}`}>
+    <svg viewBox={`0 0 ${W} ${bottom + 28}`} className={`line-chart ${rain ? "rain" : ""}`}>
       <defs>
         <linearGradient id={id} x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0" stopColor={rain ? stroke : "var(--label)"} stopOpacity={rain ? 0 : scheme === "dark" ? 0.28 : 0.2} />
+          <stop offset="0" stopColor={rain ? stroke : "var(--label)"} stopOpacity={rain ? 0.22 : scheme === "dark" ? 0.28 : 0.2} />
           <stop offset="1" stopColor={rain ? stroke : "var(--label)"} stopOpacity={0} />
         </linearGradient>
       </defs>
       {ticks.map((t) => (
         <g key={t}>
           <line x1={0} x2={plotR} y1={y(t)} y2={y(t)} className="grid-line" />
-          <text x={W} y={y(t) + 5} textAnchor="end" className="axis-label">{t}{metric === "rain" || metric === "humidity" ? "%" : metric === "wind" ? "" : "°"}</text>
+          <text x={322} y={y(t) + 4.5} textAnchor="start" className="axis-label chart-axis">{t}{metric === "rain" || metric === "humidity" ? "%" : metric === "wind" ? "" : "°"}</text>
         </g>
       ))}
       {labels.filter(({ i }) => i > 0).map(({ i }) => <line key={i} x1={x(i)} x2={x(i)} y1={top} y2={bottom} className="grid-dash" />)}
       <line x1={x(0)} x2={x(0)} y1={top} y2={bottom} className="grid-dash" />
-      {!rain ? <path d={area} fill={`url(#${id})`} /> : null}
-      <path d={line} stroke={stroke} strokeWidth={rain ? 2.6 : 3} fill="none" strokeLinecap="round" />
+      <path d={area} fill={`url(#${id})`} />
+      <path d={line} stroke={stroke} strokeWidth={rain ? 2.2 : 3} fill="none" strokeLinecap="round" />
       <circle cx={pts[0][0]} cy={pts[0][1]} r={12} fill="var(--gray500)" fillOpacity={0.35} className={rain ? "hidden" : ""} />
       <circle cx={pts[0][0]} cy={pts[0][1]} r={rain ? 4.5 : 7} fill={stroke} />
       {labels.map(({ i, p }) => (
-        <text key={i} x={x(i)} y={bottom + 26} className="x-axis" textAnchor="start">
+        <text key={i} x={x(i)} y={bottom + 24.9} className="x-axis" textAnchor="start">
           {p.hour === 0 && i > 0 ? `${p.month}/${p.day} (${WEEKDAY_SHORT[p.weekday]})` : `${i === 0 && !startsNow ? 0 : p.hour}時`}
         </text>
       ))}

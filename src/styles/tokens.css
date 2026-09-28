@@ -19,10 +19,11 @@
   --segment-thumb: #ffffff;
   --glass: rgba(246, 246, 246, 0.62);
   --glass-border: rgba(0, 0, 0, 0.08);
+  --glass-control: rgba(249, 249, 249, 0.92);
   --glass-shadow: 0 8px 28px rgba(0, 0, 0, 0.12);
   --dim: rgba(0, 0, 0, 0.35);
-  --alert-bg: rgba(242, 242, 242, 0.86);
-  --alert-button: rgba(120, 120, 128, 0.16);
+  --alert-bg: rgba(241, 241, 241, 0.97);
+  --alert-button: rgba(120, 120, 128, 0.2);
 
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", "Helvetica Neue", Arial, sans-serif;
   color-scheme: light;
@@ -44,11 +45,12 @@
   --grouped-cell: #2c2c2e;
   --segment-track: #2c2c2e;
   --segment-thumb: #000000;
-  --glass: rgba(40, 40, 46, 0.52);
-  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass: rgba(255, 255, 255, 0.075);
+  --glass-border: rgba(255, 255, 255, 0.13);
+  --glass-control: rgba(48, 48, 48, 0.92);
   --glass-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
   --dim: rgba(0, 0, 0, 0.5);
-  --alert-bg: rgba(44, 44, 46, 0.9);
+  --alert-bg: rgba(52, 52, 54, 0.97);
   --alert-button: rgba(120, 120, 128, 0.32);
   color-scheme: dark;
 }
