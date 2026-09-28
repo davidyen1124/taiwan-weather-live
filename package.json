@@ -9,14 +9,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "leaflet": "^1.9.4",
     "lottie-web": "^5.13.0",
-    "lucide-react": "^1.24.0",
+    "maplibre-gl": "^5.24.0",
     "react": "19.2.6",
     "react-dom": "19.2.6"
   },
   "devDependencies": {
-    "@types/leaflet": "^1.9.21",
     "@types/node": "^22.20.4",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",

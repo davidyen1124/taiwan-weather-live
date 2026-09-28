@@ -1,13 +1,14 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { PreferencesProvider } from "./components/PreferencesProvider";
-import { WeatherApp } from "./components/WeatherApp";
-import "./globals.css";
+import { App } from "./App";
+import { StoreProvider } from "./state";
+import "./styles/tokens.css";
+import "./styles/app.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <PreferencesProvider>
-      <WeatherApp />
-    </PreferencesProvider>
+    <StoreProvider>
+      <App />
+    </StoreProvider>
   </StrictMode>,
 );
