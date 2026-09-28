@@ -57,7 +57,7 @@ p, h1, h2, h3 { margin: 0; font-weight: inherit; }
   grid-template-columns: repeat(3, 1fr);
   padding: 3px 4px;
   border-radius: 32px;
-  background: var(--glass);
+  background: var(--tab-glass);
   border: 0.5px solid var(--glass-border);
   box-shadow: var(--glass-shadow);
   backdrop-filter: blur(18px) saturate(1.6);
@@ -269,7 +269,7 @@ p, h1, h2, h3 { margin: 0; font-weight: inherit; }
 .drawer-dim { position: absolute; inset: 0; background: var(--dim); opacity: 0; transition: opacity 0.3s; }
 .drawer-layer.open .drawer-dim { opacity: 1; }
 .drawer {
-  position: absolute; top: 0; bottom: 0; left: 0; width: 322.5px;
+  position: absolute; top: 0; bottom: 0; left: 0; width: calc(100% * 322.5 / 393); /* the app's drawer is 82% of the screen */
   background: var(--gray100); transform: translateX(-100%); transition: transform 0.35s cubic-bezier(.2, .9, .3, 1);
   box-shadow: 0 0 22px rgba(0, 0, 0, 0.12);
 }

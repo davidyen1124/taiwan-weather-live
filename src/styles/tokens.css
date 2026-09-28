@@ -18,6 +18,7 @@
   --segment-track: #ebebed;
   --segment-thumb: #ffffff;
   --glass: rgba(246, 246, 246, 0.62);
+  --tab-glass: rgba(246, 246, 246, 0.62);
   --glass-border: rgba(0, 0, 0, 0.08);
   --glass-control: rgba(249, 249, 249, 0.92);
   --glass-shadow: 0 8px 28px rgba(0, 0, 0, 0.12);
@@ -46,6 +47,7 @@
   --segment-track: #2c2c2e;
   --segment-thumb: #000000;
   --glass: rgba(255, 255, 255, 0.075);
+  --tab-glass: rgba(66, 66, 70, 0.58);
   --glass-border: rgba(255, 255, 255, 0.13);
   --glass-control: rgba(48, 48, 48, 0.92);
   --glass-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
