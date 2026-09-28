@@ -71,7 +71,6 @@ function SectionOrderPage({ onBack }: { onBack: () => void }) {
   const [revealed, setRevealed] = useState<SectionId | null>(null);
   const visible = prefs.order.filter((id) => !prefs.hidden.includes(id));
   const hidden = prefs.order.filter((id) => prefs.hidden.includes(id));
-  const isDefault = prefs.hidden.length === 0 && prefs.order.every((id, i) => id === SECTIONS[i]);
 
   const move = (id: SectionId, to: number) => {
     const next = visible.filter((v) => v !== id);
@@ -102,7 +101,7 @@ function SectionOrderPage({ onBack }: { onBack: () => void }) {
       <div className="settings-nav">
         <button type="button" className="glass-circle" aria-label="返回" onClick={onBack}><Symbol name="chevronLeft" size={22} strokeWidth={2.2} /></button>
         <h2>首頁區塊順序</h2>
-        <button type="button" className="glass-capsule" disabled={isDefault} onClick={() => setPrefs({ order: [...SECTIONS], hidden: [] })}>恢復預設</button>
+        <button type="button" className="glass-capsule" onClick={() => setPrefs({ order: [...SECTIONS], hidden: [] })}>恢復預設</button>
       </div>
       <div className="settings-scroll">
         <h3>顯示</h3>

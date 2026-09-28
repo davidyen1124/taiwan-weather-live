@@ -41,7 +41,7 @@ export function AddLocationSheet({ open, onClose, onAdded }: { open: boolean; on
   return (
     <Sheet open={open} onClose={onClose} label="新增地點" className="add-sheet">
       <div className="add-header">
-        <button type="button" className="glass-circle" aria-label="關閉" onClick={onClose}><Symbol name="xmark" size={20} strokeWidth={2} /></button>
+        <button type="button" className="glass-circle" aria-label="關閉" onClick={onClose}><Symbol name="xmark" size={24} strokeWidth={1.8} /></button>
         <h2>想看哪裡的天氣？</h2>
         <span className="glass-circle-spacer" />
       </div>
