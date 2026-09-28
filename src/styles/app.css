@@ -415,7 +415,7 @@ p, h1, h2, h3 { margin: 0; font-weight: inherit; }
 .add-row.header { font-weight: 700; }
 .add-row strong { font-weight: 700; }
 .add-row span { color: var(--gray600); }
-.add-search { flex: none; display: flex; align-items: center; gap: 14px; padding: 10px 16px 55px; background: var(--gray100); }
+.add-search { flex: none; display: flex; align-items: center; gap: 14px; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: var(--gray100); }
 .search-field { flex: 1; display: flex; align-items: center; gap: 8px; height: 46px; padding: 0 14px; border-radius: 23px; background: var(--gray200); color: var(--gray600); }
 :root[data-theme="dark"] .search-field { background: #1e1e20; }
 .search-field input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; font: inherit; font-size: 17px; color: var(--label); caret-color: var(--system-blue); }
