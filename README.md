@@ -9,11 +9,24 @@ opinion about whether you should bring an umbrella. (Bring an umbrella. It's Tai
 
 **Live:** https://davidyen1124.github.io/taiwan-weather-live/
 
-![Screens in light and dark mode](docs/screens.webp)
-
-| 預報 (light) | 預報 (dark) | 一週概況 | 72 小時預報 | 圖資 · 雷達回波 | 雷陣雨 at night |
-| --- | --- | --- | --- | --- | --- |
-| ![](docs/home-light.webp) | ![](docs/home-dark.webp) | ![](docs/week-light.webp) | ![](docs/hourly-dark.webp) | ![](docs/radar-light.webp) | ![](docs/rain-dark.webp) |
+<table>
+  <tr>
+    <th>預報</th><th>預報 · 夜間深色</th><th>雷陣雨</th>
+  </tr>
+  <tr>
+    <td><img src="docs/home-light.webp" width="240" alt="Home, light mode"></td>
+    <td><img src="docs/home-dark.webp" width="240" alt="Home at night, dark mode"></td>
+    <td><img src="docs/thunder-light.webp" width="240" alt="Home during a thunderstorm"></td>
+  </tr>
+  <tr>
+    <th>一週概況</th><th>72 小時預報</th><th>圖資 · 雷達回波</th>
+  </tr>
+  <tr>
+    <td><img src="docs/week-light.webp" width="240" alt="7-day overview"></td>
+    <td><img src="docs/hourly-dark.webp" width="240" alt="72-hour forecast, dark mode"></td>
+    <td><img src="docs/radar-light.webp" width="240" alt="Radar map"></td>
+  </tr>
+</table>
 
 ## What's inside
 
@@ -26,16 +39,21 @@ opinion about whether you should bring an umbrella. (Bring an umbrella. It's Tai
 | 警特報 | Active CWA advisories with an in-app web view |
 | Drawer & 設定 | Add 368 districts or 151 mountains, reorder or delete them, pick light/dark, reorder or hide home sections |
 
-Things deliberately left out: onboarding (it asks for your location and gets out of the way),
-ads, the VIP paywall (every "VIP" feature here is free — you're welcome), push notifications,
+Your location stays yours: the site never asks for it on its own. Pick places from the list
+(368 districts, 151 mountains) and they're kept as favourites in your browser; tap
+**定位目前位置** only if you want the nearest district added for you.
+
+Things deliberately left out: onboarding, ads, the VIP paywall (every "VIP" feature here is free — you're welcome), push notifications,
 widgets, Live Activities and the Apple Watch. A website on your wrist is a cry for help.
 
 ## The sky got an upgrade
 
 The original app draws its hero with six flat Lottie animations. We checked: they really are
 that flat — the JSON files in its bundle are byte-identical to what we first shipped. So the
-hero is now hand-picked generated artwork (OpenAI `gpt-image` via Codex's `imagegen` skill),
-one image per weather family and time of day:
+hero is now full-bleed generated artwork (OpenAI `gpt-image` via Codex's `imagegen` skill),
+one image per weather family and time of day. Each sky keeps its top-left quarter empty for the
+city name and temperature, puts the weather in the other three quarters, and gets a soft scrim
+so the text stays readable — dark text on bright skies, white text on night and storm skies:
 
 | | 晴 | 晴時多雲 | 多雲 | 陰 | 雨 | 雷陣雨 |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -51,7 +69,7 @@ Which icons were regenerated, and which weren't:
 
 | Element | Decision | Why |
 | --- | --- | --- |
-| Hero sky (12 images) | Generated | Big illustrative raster art; the original is flat vector |
+| Hero sky (12 images) | Generated | Big illustrative full-bleed raster art; the original is flat vector |
 | Colour weather icons in the 7-day list, 生活建議 and sheets (10) | Generated as one sprite sheet so they match the hero | Illustrative, shown at 28–50 px |
 | App icon, favicon, social preview | Generated | Raster branding assets |
 | Hourly line glyphs, 生活建議 glyphs (短袖, 適合曬衣…), hamburger, chevron, search | Kept the app's vector glyphs | Monochrome template icons must tint for dark mode and stay crisp at 20–26 px |

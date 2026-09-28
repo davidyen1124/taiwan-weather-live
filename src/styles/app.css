@@ -100,18 +100,35 @@ p, h1, h2, h3 { margin: 0; font-weight: inherit; }
 }
 .location-page.collapsed .hero { box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12); }
 :root[data-theme="dark"] .location-page.collapsed .hero { box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6); }
-/* Generated hero art: 2:3 portrait, arch window spans 42.3%–100% of the width. */
+/* Generated full-bleed hero art; the top-left quarter is empty sky for the text. */
 .hero-art {
   position: absolute;
-  top: 0;
-  right: 0;
-  height: calc(392px * (357 - 115 * var(--p)) / 357);
-  aspect-ratio: 2 / 3;
-  object-fit: contain;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 30%;
   user-select: none;
   animation: hero-in 0.5s ease-out;
 }
 @keyframes hero-in { from { opacity: 0; } }
+.hero-scrim { position: absolute; inset: 0; pointer-events: none; }
+.hero-day .hero-scrim {
+  background:
+    radial-gradient(120% 95% at 0% 12%, rgba(255, 255, 255, 0.62) 0%, rgba(255, 255, 255, 0.34) 45%, rgba(255, 255, 255, 0) 72%);
+}
+.hero-night .hero-scrim {
+  background:
+    radial-gradient(120% 95% at 0% 12%, rgba(4, 10, 28, 0.5) 0%, rgba(4, 10, 28, 0.26) 45%, rgba(4, 10, 28, 0) 72%);
+}
+.hero-night { color: #fff; }
+.hero-night .menu-button { color: #fff; }
+.hero-night .hero-range { color: rgba(255, 255, 255, 0.78); }
+.hero-night .hero-wind { color: rgba(255, 255, 255, 0.9); }
+.hero-day { color: #000; }
+.hero-day .menu-button { color: #000; }
+.hero-day .hero-range { color: #3c3c43; }
+.hero-day .hero-wind { color: #1c1c1e; }
 .menu-button { position: absolute; z-index: 2; left: 31px; top: 25px; width: 38px; height: 38px; display: grid; place-items: center; pointer-events: auto; color: var(--label); }
 .hero-title { position: absolute; left: 33px; top: 72px; font-size: 20px; line-height: 30px; font-weight: 600; letter-spacing: 0.3px; white-space: nowrap; display: flex; align-items: center; gap: 7px; }
 .hero-location-arrow { color: var(--location-blue); margin-top: 1px; }

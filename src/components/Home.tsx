@@ -136,8 +136,9 @@ function Hero({ data, location, onMenu }: { data: WeatherBundle; location: Saved
   const title = location.kind === "mountain" ? location.name : `${forecast.city ?? location.city} ${forecast.locationName}`;
 
   return (
-    <header className="hero">
+    <header className={`hero ${night || kind === "thunder" ? "hero-night" : "hero-day"}`}>
       <img className="hero-art" src={heroArt(kind, night)} alt="" aria-hidden />
+      <div className="hero-scrim" aria-hidden />
       <MenuButton onClick={onMenu} />
       <h1 className="hero-title">
         {title}

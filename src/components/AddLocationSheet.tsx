@@ -20,7 +20,10 @@ function useRows(tab: "city" | "mountain", query: string) {
         if (!q || normalize(`${m.name}${m.city}`).includes(q)) out.push({ key: m.id, kind: "item", location: m, label: m.name, sub: m.city });
       }
     }
-    return out;
+    if (!q) return out;
+    // Exact names first, then names starting with the query, then everything else.
+    const rank = (r: Row) => { const n = normalize(r.location!.name); return n === q ? 0 : n.startsWith(q) ? 1 : 2; };
+    return out.map((r, i) => [r, i] as const).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map(([r]) => r);
   }, [tab, query]);
 }
 
