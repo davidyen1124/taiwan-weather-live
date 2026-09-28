@@ -5,7 +5,6 @@ import { Drawer } from "./components/Drawer";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { HourlySheet, WeekSheet } from "./components/ForecastSheets";
 import { HomeScreen } from "./components/Home";
-import { Onboarding } from "./components/Onboarding";
 import { SettingsSheet } from "./components/SettingsSheet";
 import { TabBar, type Tab } from "./components/TabBar";
 import { Alert } from "./components/ui";
@@ -17,7 +16,7 @@ const MapsScreen = lazy(() => import("./components/Maps").then((m) => ({ default
 type Overlay = "drawer" | "add" | "settings" | "week" | "hourly" | "aqi-help" | null;
 
 export function App() {
-  const { prefs, setPrefs, locations, page, weather, locate } = useStore();
+  const { locations, page, weather } = useStore();
   const [tab, setTab] = useState<Tab>("home");
   const [overlay, setOverlay] = useState<Overlay>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -26,17 +25,6 @@ export function App() {
   const location = locations[Math.min(page, locations.length - 1)];
   const data = location ? weather[weatherKey(location)]?.data : undefined;
   const close = useCallback(() => setOverlay(null), []);
-
-  if (!prefs.onboarded) {
-    return (
-      <div className="app">
-        <Onboarding
-          onLocate={() => { locate(); setPrefs({ onboarded: true }); }}
-          onManual={() => { setPrefs({ onboarded: true }); setOverlay("add"); }}
-        />
-      </div>
-    );
-  }
 
   return (
     <div className="app">

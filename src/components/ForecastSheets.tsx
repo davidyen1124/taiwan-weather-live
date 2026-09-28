@@ -268,7 +268,10 @@ function LineChart({ hours, values, metric, scheme, startsNow }: { hours: Hourly
   const stroke = rain ? dyn(palette.blue400, scheme) : "var(--label)";
   const id = `grad-${metric}`;
   const startHour = taipei(hours[0].time).hour;
-  const labels = hours.map((h, i) => ({ i, p: taipei(h.time) })).filter(({ i, p }) => i === 0 || (i % 6 === 0) || (p.hour === 0 && startsNow));
+  const all = hours.map((h, i) => ({ i, p: taipei(h.time) }));
+  const midnight = startsNow ? all.find(({ i, p }) => i > 0 && p.hour === 0)?.i : undefined;
+  // Date labels are wide, so drop a regular 6-hour label that would collide with one.
+  const labels = all.filter(({ i }) => i === 0 || i === midnight || (i % 6 === 0 && (midnight === undefined || Math.abs(i - midnight) >= 5)));
 
   return (
     <svg viewBox={`0 0 ${W} ${bottom + 28}`} className={`line-chart ${rain ? "rain" : ""}`}>

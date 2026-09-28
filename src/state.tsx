@@ -16,8 +16,8 @@ export const SECTION_LABELS: Record<SectionId, string> = {
 };
 
 export type Theme = "system" | "light" | "dark";
-type Prefs = { theme: Theme; order: SectionId[]; hidden: SectionId[]; onboarded: boolean };
-const DEFAULT_PREFS: Prefs = { theme: "system", order: [...SECTIONS], hidden: [], onboarded: false };
+type Prefs = { theme: Theme; order: SectionId[]; hidden: SectionId[] };
+const DEFAULT_PREFS: Prefs = { theme: "system", order: [...SECTIONS], hidden: [] };
 
 export type WeatherEntry = { status: "loading" | "ok" | "error"; data?: WeatherBundle; updatedAt?: number };
 export type GeoState = { status: "idle" | "locating" | "ok" | "denied" | "timeout" | "unavailable"; coords?: Coordinates };
@@ -46,7 +46,6 @@ function parsePrefs(v: unknown): Prefs | null {
     theme: p.theme === "light" || p.theme === "dark" ? p.theme : "system",
     order: [...order, ...SECTIONS.filter((s) => !order.includes(s))],
     hidden: Array.isArray(p.hidden) ? [...new Set(p.hidden.filter(valid))] : [],
-    onboarded: p.onboarded === true,
   };
 }
 

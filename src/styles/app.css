@@ -100,14 +100,18 @@ p, h1, h2, h3 { margin: 0; font-weight: inherit; }
 }
 .location-page.collapsed .hero { box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12); }
 :root[data-theme="dark"] .location-page.collapsed .hero { box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6); }
-.hero-lottie {
+/* Generated hero art: 2:3 portrait, arch window spans 42.3%–100% of the width. */
+.hero-art {
   position: absolute;
+  top: 0;
   right: 0;
-  bottom: 0;
-  width: calc(291px - 108px * var(--p));
-  height: calc(396px - 147px * var(--p));
+  height: calc(392px * (357 - 115 * var(--p)) / 357);
+  aspect-ratio: 2 / 3;
+  object-fit: contain;
+  user-select: none;
+  animation: hero-in 0.5s ease-out;
 }
-.hero-lottie svg { display: block; }
+@keyframes hero-in { from { opacity: 0; } }
 .menu-button { position: absolute; z-index: 2; left: 31px; top: 25px; width: 38px; height: 38px; display: grid; place-items: center; pointer-events: auto; color: var(--label); }
 .hero-title { position: absolute; left: 33px; top: 72px; font-size: 20px; line-height: 30px; font-weight: 600; letter-spacing: 0.3px; white-space: nowrap; display: flex; align-items: center; gap: 7px; }
 .hero-location-arrow { color: var(--location-blue); margin-top: 1px; }
@@ -577,23 +581,3 @@ p, h1, h2, h3 { margin: 0; font-weight: inherit; }
 .webview-progress { height: 2px; background: linear-gradient(90deg, #3a78c9 20%, transparent 20%); transition: opacity 0.3s; }
 .webview-progress.done { opacity: 0; }
 .webview iframe { flex: 1; width: 100%; border: 0; background: #fff; }
-
-/* ---------- Onboarding ---------- */
-.onboarding { position: absolute; inset: 0; background: var(--gray200); }
-:root[data-theme="dark"] .onboarding { background: #111; }
-.onboarding-pages { position: absolute; inset: 0; display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
-.onboarding-pages::-webkit-scrollbar { display: none; }
-.onboarding-page { position: relative; flex: 0 0 100%; height: 100%; scroll-snap-align: start; text-align: center; }
-.location-step .onboarding-page { position: absolute; inset: 0; }
-.onboarding-art { position: absolute; left: 50%; top: 116px; width: 344px; margin-left: -172px; aspect-ratio: 393 / 265; }
-.onboarding-dots-space { display: none; }
-.onboarding h1 { position: absolute; left: 0; right: 0; top: 402px; font-size: 20px; line-height: 28px; font-weight: 700; }
-.onboarding p { position: absolute; left: 20px; right: 20px; top: 438px; white-space: pre-line; font-size: 12.6px; line-height: 16.6px; color: var(--gray600); }
-.onboarding-dots { position: absolute; left: 0; right: 0; top: 395.5px; display: flex; justify-content: center; gap: 5px; pointer-events: none; }
-.onboarding-dots span { width: 6px; height: 6px; border-radius: 3px; background: var(--gray400); transition: width 0.25s; }
-.onboarding-dots span.active { width: 20px; background: var(--label); }
-.onboarding-actions { position: absolute; left: 38px; right: 37px; bottom: 77.7px; display: flex; flex-direction: column; align-items: center; gap: 14px; }
-.location-step .onboarding-actions { bottom: 40px; }
-.onboarding-button { width: 100%; height: 54.6px; border-radius: 14px; background: var(--gray900); color: var(--gray100); font-size: 17px; font-weight: 700; }
-:root[data-theme="dark"] .onboarding-button { background: #f2f2f7; color: #111; }
-.onboarding-link { font-size: 15px; line-height: 23px; color: var(--gray600); }

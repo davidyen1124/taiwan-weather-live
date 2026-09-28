@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { reading, upcomingHours, type WeatherBundle } from "../lib/api";
-import { artUrl, glyphIcon, heroAnimation, isNightHour, periodIcon, suggestionIcon } from "../lib/assets";
+import { artUrl, glyphIcon, heroArt, isNightHour, periodIcon, suggestionIcon, weatherKind } from "../lib/assets";
 import { aqiColor, aqiInfo, aqiLevel, temperatureColor, uvColor, uvLabel, type Scheme } from "../lib/colors";
 import { dateKey, hhmm, hourLabel, minutesOfDay, monthDay, taipei, weekdayName, windDirectionText } from "../lib/format";
 import type { SavedLocation } from "../lib/locations";
 import { useStore, weatherKey, type SectionId } from "../state";
-import { HeroAnimation } from "./Hero";
 import { Glyph, Symbol } from "./ui";
 
 export type HomeActions = {
@@ -126,12 +125,12 @@ function Hero({ data, location, onMenu }: { data: WeatherBundle; location: Saved
   const direction = reading(observation?.windDirection, true);
   const night = isNightHour(taipei().hour);
   const period = forecast.forecastPeriods?.[0];
-  const animation = heroAnimation(period?.weatherCode ?? now?.weatherCode ?? 4, night, period?.weatherDescription ?? now?.weatherDescription);
+  const kind = weatherKind(now?.weatherCode ?? period?.weatherCode ?? 4, now?.weatherDescription ?? period?.weatherDescription);
   const title = location.kind === "mountain" ? location.name : `${forecast.city ?? location.city} ${forecast.locationName}`;
 
   return (
     <header className="hero">
-      <HeroAnimation name={animation} />
+      <img className="hero-art" src={heroArt(kind, night)} alt="" aria-hidden />
       <MenuButton onClick={onMenu} />
       <h1 className="hero-title">
         {title}
