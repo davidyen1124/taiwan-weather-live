@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { fetchWeatherBundle, type Coordinates, type WeatherBundle } from "./lib/api";
 import type { Scheme } from "./lib/colors";
-import { CURRENT_LOCATION, isSavedLocation, type SavedLocation } from "./lib/locations";
+import { isSavedLocation, nearestDistrict, type SavedLocation } from "./lib/locations";
 
 export const SECTIONS = ["metrics", "aqi", "hourly", "life", "weekly", "extras", "sun"] as const;
 export type SectionId = (typeof SECTIONS)[number];
@@ -20,7 +20,7 @@ type Prefs = { theme: Theme; order: SectionId[]; hidden: SectionId[] };
 const DEFAULT_PREFS: Prefs = { theme: "system", order: [...SECTIONS], hidden: [] };
 
 export type WeatherEntry = { status: "loading" | "ok" | "error"; data?: WeatherBundle; updatedAt?: number };
-export type GeoState = { status: "idle" | "locating" | "ok" | "denied" | "timeout" | "unavailable"; coords?: Coordinates };
+export type LocateError = "denied" | "timeout" | "unavailable";
 
 const STORAGE = { prefs: "tw-weather.prefs.v2", locations: "tw-weather.locations.v2" };
 
@@ -50,9 +50,8 @@ function parsePrefs(v: unknown): Prefs | null {
 }
 
 function parseLocations(v: unknown): SavedLocation[] | null {
-  if (!Array.isArray(v)) return null;
-  const list = v.filter(isSavedLocation);
-  return list.length ? list : null;
+  // Older versions stored an always-on "current location" entry; it is dropped here.
+  return Array.isArray(v) ? v.filter(isSavedLocation) : null;
 }
 
 type Store = {
@@ -66,8 +65,11 @@ type Store = {
   setPage: (index: number) => void;
   weather: Record<string, WeatherEntry>;
   ensureWeather: (location: SavedLocation, force?: boolean) => void;
-  geo: GeoState;
-  locate: () => void;
+  /** Only ever called from a user tap — the site never asks for location on its own. */
+  locateMe: () => Promise<boolean>;
+  locating: boolean;
+  locateError: LocateError | null;
+  clearLocateError: () => void;
 };
 
 const Ctx = createContext<Store | null>(null);
@@ -77,10 +79,11 @@ const STALE_MS = 10 * 60 * 1000;
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [prefs, setPrefsState] = useState<Prefs>(() => load(STORAGE.prefs, DEFAULT_PREFS, parsePrefs));
-  const [locations, setLocationsState] = useState<SavedLocation[]>(() => load(STORAGE.locations, [CURRENT_LOCATION], parseLocations));
+  const [locations, setLocationsState] = useState<SavedLocation[]>(() => load(STORAGE.locations, [], parseLocations));
   const [page, setPage] = useState(0);
   const [weather, setWeather] = useState<Record<string, WeatherEntry>>({});
-  const [geo, setGeo] = useState<GeoState>({ status: "idle" });
+  const [locating, setLocating] = useState(false);
+  const [locateError, setLocateError] = useState<LocateError | null>(null);
   const [systemDark, setSystemDark] = useState(() => matchMedia("(prefers-color-scheme: dark)").matches);
   const inflight = useRef(new Map<string, AbortController>());
   const weatherRef = useRef(weather);
@@ -137,40 +140,52 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       });
   }, []);
 
-  const locate = useCallback(() => {
+  const ensureWeather = useCallback((location: SavedLocation, force = false) => {
+    load_(location.id, location.coordinates, force);
+  }, [load_]);
+
+  // Fetch every favourite up front so swiping between pages never lands on a spinner.
+  useEffect(() => {
+    locations.forEach((location) => load_(location.id, location.coordinates));
+  }, [locations, load_]);
+
+  const locateMe = useCallback(() => new Promise<boolean>((resolve) => {
     if (!("geolocation" in navigator)) {
-      setGeo({ status: "unavailable" });
+      setLocateError("unavailable");
+      resolve(false);
       return;
     }
-    setGeo((g) => ({ ...g, status: g.coords ? "ok" : "locating" }));
+    setLocating(true);
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        const coords = { latitude: Number(position.coords.latitude.toFixed(5)), longitude: Number(position.coords.longitude.toFixed(5)) };
-        setGeo({ status: "ok", coords });
+        const place = { ...nearestDistrict({ latitude: position.coords.latitude, longitude: position.coords.longitude }), located: true };
+        setLocationsState((current) => {
+          const cleared = current.map((l) => (l.located ? { ...l, located: false } : l));
+          const index = cleared.findIndex((l) => l.id === place.id);
+          const next = index >= 0 ? cleared.map((l, i) => (i === index ? place : l)) : [place, ...cleared];
+          save(STORAGE.locations, next);
+          setPage(index >= 0 ? index : 0);
+          return next;
+        });
+        setLocating(false);
+        resolve(true);
       },
-      (error) => setGeo((g) => (g.coords ? g : { status: error.code === error.TIMEOUT ? "timeout" : error.code === error.PERMISSION_DENIED ? "denied" : "unavailable" })),
+      (error) => {
+        setLocating(false);
+        setLocateError(error.code === error.TIMEOUT ? "timeout" : error.code === error.PERMISSION_DENIED ? "denied" : "unavailable");
+        resolve(false);
+      },
       { enableHighAccuracy: false, timeout: 15000, maximumAge: 10 * 60 * 1000 },
     );
-  }, []);
+  }), []);
 
-  const ensureWeather = useCallback((location: SavedLocation, force = false) => {
-    if (location.kind === "current") {
-      if (geo.coords) load_("current", geo.coords, force);
-      else if (geo.status === "idle") locate();
-      return;
-    }
-    if (location.coordinates) load_(location.id, location.coordinates, force);
-  }, [geo.coords, geo.status, load_, locate]);
-
-  useEffect(() => {
-    if (geo.coords) load_("current", geo.coords, true);
-  }, [geo.coords, load_]);
+  const clearLocateError = useCallback(() => setLocateError(null), []);
 
   const value = useMemo<Store>(() => ({
-    scheme, prefs, setPrefs, locations, setLocations, addLocation, page, setPage, weather, ensureWeather, geo, locate,
-  }), [scheme, prefs, setPrefs, locations, setLocations, addLocation, page, weather, ensureWeather, geo, locate]);
+    scheme, prefs, setPrefs, locations, setLocations, addLocation, page, setPage, weather, ensureWeather, locateMe, locating, locateError, clearLocateError,
+  }), [scheme, prefs, setPrefs, locations, setLocations, addLocation, page, weather, ensureWeather, locateMe, locating, locateError, clearLocateError]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
-export const weatherKey = (location: SavedLocation) => (location.kind === "current" ? "current" : location.id);
+export const weatherKey = (location: SavedLocation) => location.id;

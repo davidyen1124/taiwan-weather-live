@@ -1,7 +1,5 @@
-const art = import.meta.glob("../assets/art/*.webp", { eager: true, import: "default", query: "?url" }) as Record<string, string>;
 const icons = import.meta.glob("../assets/icons/*.png", { eager: true, import: "default", query: "?url" }) as Record<string, string>;
 
-export const artUrl = (name: string) => art[`../assets/art/${name}.webp`];
 export const iconUrl = (name: string) => icons[`../assets/icons/${name}.png`];
 
 export const isNightHour = (hour: number) => hour < 6 || hour >= 18;

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { reading, upcomingHours, type WeatherBundle } from "../lib/api";
-import { artUrl, glyphIcon, heroArt, isNightHour, periodIcon, suggestionIcon, weatherKind } from "../lib/assets";
+import { reading, upcomingHours, upcomingPeriods, type WeatherBundle } from "../lib/api";
+import { glyphIcon, heroArt, isNightHour, periodIcon, suggestionIcon, weatherKind } from "../lib/assets";
 import { aqiColor, aqiInfo, aqiLevel, temperatureColor, uvColor, uvLabel, type Scheme } from "../lib/colors";
 import { dateKey, hhmm, hourLabel, minutesOfDay, monthDay, taipei, weekdayName, windDirectionText } from "../lib/format";
 import type { SavedLocation } from "../lib/locations";
 import { useStore, weatherKey, type SectionId } from "../state";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { Glyph, Symbol } from "./ui";
 
 export type HomeActions = {
@@ -21,10 +22,14 @@ const HERO_COLLAPSED = 242;
 export function HomeScreen(actions: HomeActions) {
   const { locations, page, setPage } = useStore();
   const pagerRef = useRef<HTMLDivElement>(null);
+  const scrolling = useRef(false);
 
+  // Only jump the pager when the page changes from elsewhere (drawer, page dots, locate).
+  // Page changes that come from the user's own swipe must not fight the scroll.
   useEffect(() => {
     const pager = pagerRef.current;
     if (!pager) return;
+    if (scrolling.current) { scrolling.current = false; return; }
     const target = page * pager.clientWidth;
     if (Math.abs(pager.scrollLeft - target) > 2) pager.scrollTo({ left: target, behavior: "instant" as ScrollBehavior });
   }, [page, locations.length]);
@@ -33,37 +38,42 @@ export function HomeScreen(actions: HomeActions) {
     const pager = pagerRef.current;
     if (!pager) return;
     const index = Math.round(pager.scrollLeft / pager.clientWidth);
-    if (index !== page) setPage(index);
+    if (index !== page) {
+      scrolling.current = true;
+      setPage(index);
+    }
   };
 
   return (
     <main className="home">
       <div className="pager" ref={pagerRef} onScroll={onScroll}>
         {locations.map((location, index) => (
-          <LocationPage key={location.id} location={location} active={index === page} near={Math.abs(index - page) <= 1} actions={actions} />
+          <ErrorBoundary key={location.id} className="location-page"><LocationPage location={location} active={index === page} actions={actions} /></ErrorBoundary>
         ))}
       </div>
-      <div className="page-control" aria-label={`第 ${page + 1} 頁，共 ${locations.length} 頁`}>
-        {locations.map((location, index) => (
-          <button key={location.id} type="button" aria-label={location.kind === "current" ? "目前位置" : `${location.city}${location.name}`}
-            className={`page-dot ${index === page ? "current" : ""} ${location.kind === "current" ? "is-location" : ""}`} onClick={() => setPage(index)}>
-            {location.kind === "current" ? <Symbol name="locationFill" size={17} /> : <span />}
-          </button>
-        ))}
-      </div>
+      {locations.length > 1 ? (
+        <div className="page-control" aria-label={`第 ${page + 1} 頁，共 ${locations.length} 頁`}>
+          {locations.map((location, index) => (
+            <button key={location.id} type="button" aria-label={`${location.city}${location.name}`}
+              className={`page-dot ${index === page ? "current" : ""} ${location.located ? "is-location" : ""}`} onClick={() => setPage(index)}>
+              {location.located ? <Symbol name="locationFill" size={17} /> : <span />}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </main>
   );
 }
 
-function LocationPage({ location, active, near, actions }: { location: SavedLocation; active: boolean; near: boolean; actions: HomeActions }) {
-  const { weather, ensureWeather, geo, scheme, prefs } = useStore();
+function LocationPage({ location, active, actions }: { location: SavedLocation; active: boolean; actions: HomeActions }) {
+  const { weather, ensureWeather, scheme, prefs } = useStore();
   const entry = weather[weatherKey(location)];
   const scrollRef = useRef<HTMLDivElement>(null);
   const pageRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
-    if (near) ensureWeather(location);
-  }, [near, location, ensureWeather, active]);
+    if (active) ensureWeather(location);
+  }, [active, location, ensureWeather]);
 
   useEffect(() => {
     if (!active) return;
@@ -81,10 +91,9 @@ function LocationPage({ location, active, near, actions }: { location: SavedLoca
   };
 
   const data = entry?.data;
-  const failed = location.kind === "current" && !data && (geo.status === "denied" || geo.status === "timeout" || geo.status === "unavailable");
 
   return (
-    <section className="location-page" ref={pageRef} aria-label={location.kind === "current" ? "目前位置" : `${location.city}${location.name}`}>
+    <section className="location-page" ref={pageRef} aria-label={`${location.city}${location.name}`}>
       {data ? (
         <>
           <Hero data={data} location={location} onMenu={actions.openDrawer} />
@@ -97,8 +106,6 @@ function LocationPage({ location, active, near, actions }: { location: SavedLoca
             <p className="footer-source">資料來源：中央氣象署、環保署、各地方政府環保局</p>
           </div>
         </>
-      ) : failed ? (
-        <LocationFailure status={geo.status} onMenu={actions.openDrawer} onManual={actions.openAddLocation} />
       ) : entry?.status === "error" ? (
         <LoadError onMenu={actions.openDrawer} onRetry={() => ensureWeather(location, true)} />
       ) : (
@@ -134,7 +141,7 @@ function Hero({ data, location, onMenu }: { data: WeatherBundle; location: Saved
       <MenuButton onClick={onMenu} />
       <h1 className="hero-title">
         {title}
-        {location.kind === "current" ? <Symbol name="locationFill" size={16} className="hero-location-arrow" /> : null}
+        {location.located ? <Symbol name="locationFill" size={16} className="hero-location-arrow" /> : null}
       </h1>
       <p className="hero-temp">{temperature === null ? "--" : Math.round(temperature)}°</p>
       <p className="hero-range">最高 {today ? Math.round(today.maxTemperature) : "--"}° • 最低 {today ? Math.round(today.minTemperature) : "--"}°</p>
@@ -246,20 +253,19 @@ function HourlyCard({ data, onDetail }: { data: WeatherBundle; onDetail: () => v
 }
 
 function LifeCard({ data }: { data: WeatherBundle }) {
-  const periods = data.forecast.forecastPeriods ?? [];
+  const periods = upcomingPeriods(data.forecast.forecastPeriods);
   if (!periods.length) return null;
   return (
     <section className="home-section">
       <SectionHeader title="生活建議" />
       <div className="life-scroller">
         {periods.map((period) => {
-          const start = new Date(period.startTime.replace(" ", "T") + "+08:00");
-          const night = /晚|夜/.test(period.period) || isNightHour(taipei(start).hour);
+          const night = period.night;
           return (
             <div className="card life-card" key={period.startTime}>
               <div className="life-top">
                 <div>
-                  <p className="life-period">{period.period}</p>
+                  <p className="life-period">{period.label}</p>
                   <p className="life-range">{period.minTemperature} - {period.maxTemperature}°</p>
                   <p className="life-rain">降雨 {period.precipitationProbability ?? "--"}%</p>
                 </div>
@@ -403,19 +409,6 @@ function LoadError({ onMenu, onRetry }: { onMenu: () => void; onRetry: () => voi
     <HeroShell onMenu={onMenu}>
       <strong>天氣資料無法載入</strong>
       <button type="button" className="pill-button" onClick={onRetry}>重新整理</button>
-    </HeroShell>
-  );
-}
-
-function LocationFailure({ status, onMenu, onManual }: { status: string; onMenu: () => void; onManual: () => void }) {
-  const timeout = status === "timeout";
-  return (
-    <HeroShell onMenu={onMenu}>
-      <img className="state-art" src={artUrl("onboarding_image_location")} alt="" />
-      <strong>{timeout ? "定位時間過久" : "無法取得您的位置"}</strong>
-      <p>{timeout ? "目前無法快速取得您的位置，請稍後再試" : "請允許位置存取以查看目前位置的天氣\n僅用於當下查詢，我們不會儲存或追蹤你的位置"}</p>
-      <button type="button" className="pill-button" onClick={onManual}>手動選擇地區</button>
-      <span className="state-hint">或手動選擇地區來查看天氣</span>
     </HeroShell>
   );
 }

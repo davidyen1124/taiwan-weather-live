@@ -10,7 +10,8 @@ const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 /** Wall-clock parts in Taiwan time. */
 export function taipei(value: string | number | Date = Date.now()): Parts {
-  const date = value instanceof Date ? value : new Date(value);
+  let date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) date = new Date(); // never let one bad timestamp crash a screen
   const get = (type: string) => partsFormatter.formatToParts(date).find((p) => p.type === type)?.value ?? "0";
   return {
     year: Number(get("year")), month: Number(get("month")), day: Number(get("day")),
@@ -22,7 +23,7 @@ export const WEEKDAY_SHORT = ["日", "一", "二", "三", "四", "五", "六"];
 
 const pad = (n: number) => String(n).padStart(2, "0");
 export const hhmm = (value?: string | null) => {
-  if (!value) return "--";
+  if (!value || Number.isNaN(new Date(value).getTime())) return "--";
   const p = taipei(value);
   return `${pad(p.hour)}:${pad(p.minute)}`;
 };

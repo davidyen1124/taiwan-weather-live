@@ -2,12 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { reading } from "../lib/api";
 import type { SavedLocation } from "../lib/locations";
 import { useStore, weatherKey } from "../state";
-import { Alert, Symbol } from "./ui";
+import { LocateButton } from "./AddLocationSheet";
+import { Symbol } from "./ui";
 
 export function Drawer({ open, onClose, onAdd, onSettings }: { open: boolean; onClose: () => void; onAdd: () => void; onSettings: () => void }) {
   const { locations, setLocations, setPage, weather, ensureWeather } = useStore();
   const [editing, setEditing] = useState(false);
-  const [lastAlert, setLastAlert] = useState(false);
   const [dragging, setDragging] = useState<number | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -17,8 +17,9 @@ export function Drawer({ open, onClose, onAdd, onSettings }: { open: boolean; on
   }, [open, locations, ensureWeather]);
 
   const remove = (index: number) => {
-    if (locations.length <= 1) { setLastAlert(true); return; }
-    setLocations(locations.filter((_, i) => i !== index));
+    const next = locations.filter((_, i) => i !== index);
+    setLocations(next);
+    if (!next.length) onClose();
   };
 
   const startDrag = (index: number, event: React.PointerEvent) => {
@@ -59,6 +60,7 @@ export function Drawer({ open, onClose, onAdd, onSettings }: { open: boolean; on
           <button type="button" onClick={() => setEditing((e) => !e)}>{editing ? "完成" : "編輯"}</button>
           <button type="button" onClick={onAdd}>新增</button>
         </div>
+        {!editing ? <LocateButton className="in-drawer" onLocated={onClose} /> : null}
         <div className="drawer-list" ref={listRef}>
           {locations.map((location, index) => {
             const data = weather[weatherKey(location)]?.data;
@@ -70,10 +72,10 @@ export function Drawer({ open, onClose, onAdd, onSettings }: { open: boolean; on
                 </button>
                 <button type="button" className="drawer-card" disabled={editing} onClick={() => { setPage(index); onClose(); }}>
                   <span className="drawer-name">
-                    {location.kind === "current" ? "目前位置" : location.kind === "mountain" ? location.name : <>{location.city}<span>{location.name}</span></>}
+                    {location.kind === "mountain" ? location.name : <>{location.city}<span>{location.name}</span></>}
                   </span>
-                  {location.kind === "current" ? <Symbol name="locationFill" size={16} className="drawer-arrow" /> : null}
-                  <span className="drawer-temp">{editing ? (location.kind === "current" ? "…" : "") : temp == null ? "" : `${Math.round(temp)}°`}</span>
+                  {location.located ? <Symbol name="locationFill" size={16} className="drawer-arrow" /> : null}
+                  <span className="drawer-temp">{editing || temp == null ? "" : `${Math.round(temp)}°`}</span>
                 </button>
                 <span className="drawer-grip" onPointerDown={(e) => startDrag(index, e)} aria-label="拖曳排序" role="button">
                   <Symbol name="grip" size={26} />
@@ -86,9 +88,8 @@ export function Drawer({ open, onClose, onAdd, onSettings }: { open: boolean; on
           <Symbol name="gear" size={26} strokeWidth={1.6} />
         </button>
       </aside>
-      <Alert open={lastAlert} title="至少保留一個位置" message="請先新增其他位置後，再刪除這個" actions={[{ label: "了解" }]} onDismiss={() => setLastAlert(false)} />
     </div>
   );
 }
 
-const label = (l: SavedLocation) => (l.kind === "current" ? "目前位置" : `${l.city}${l.name}`);
+const label = (l: SavedLocation) => `${l.city}${l.name}`;

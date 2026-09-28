@@ -184,6 +184,35 @@ export function upcomingHours(hourly: HourlyForecast[], now = Date.now()) {
   return index <= 0 ? hourly : hourly.slice(index);
 }
 
+/** Forecast periods come as "2026-09-28 12:00:00" (districts) or ISO with offset (mountains). */
+export function parseTaipeiTime(value: string) {
+  const iso = /[T]/.test(value) ? value : `${value.replace(" ", "T")}+08:00`;
+  const date = new Date(/([+-]\d\d:\d\d|Z)$/.test(iso) ? iso : `${iso}+08:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/**
+ * The next three 生活建議 periods with the app's labels (今日白天 / 今晚明晨 / 明日白天 …).
+ * Districts already send Chinese labels; mountains send "daytime"/"nighttime" for a whole week.
+ */
+export function upcomingPeriods(periods: ForecastPeriod[] = [], now = Date.now()) {
+  const withTimes = periods
+    .map((p) => ({ ...p, start: parseTaipeiTime(p.startTime), end: parseTaipeiTime(p.endTime) }))
+    .filter((p) => p.start && p.end && p.end.getTime() > now);
+  const dayOffset = (d: Date) => Math.round((new Date(d.toLocaleDateString("en-CA", { timeZone: "Asia/Taipei" })).getTime()
+    - new Date(new Date(now).toLocaleDateString("en-CA", { timeZone: "Asia/Taipei" })).getTime()) / 86400000);
+  return withTimes.slice(0, 3).map((p) => {
+    const night = /晚|夜|night/i.test(p.period);
+    let label = p.period;
+    if (!/[\u4e00-\u9fff]/.test(label)) {
+      const offset = dayOffset(p.start!);
+      const day = ["今日", "明日", "後天"][offset] ?? p.start!.toLocaleDateString("zh-TW", { timeZone: "Asia/Taipei", month: "numeric", day: "numeric" });
+      label = night ? (offset === 0 ? "今晚明晨" : offset === 1 ? "明晚後晨" : `${day}晚上`) : `${day}白天`;
+    }
+    return { ...p, label, night };
+  });
+}
+
 /** CWA uses -99 style sentinels for missing observations. */
 export function reading(value: number | null | undefined, nonnegative = false): number | null {
   return typeof value === "number" && Number.isFinite(value) && value > -90 && (!nonnegative || value >= 0) ? value : null;
